@@ -70,12 +70,12 @@ def setup_gpio():
 def left_encoder_callback(channel):
     global left_count
     left_count += 1
-    # print(left_count)
+    print(left_count)
 
 def right_encoder_callback(channel):
     global right_count
     right_count += 1
-    # print(right_count)
+    print(right_count)
     
 def reset_encoder():
     global left_count, right_count
@@ -143,8 +143,8 @@ def pid_control():
                     flag_new_pid_cycle = False
                 pid_right.setpoint = left_count
                 right = pid_right(right_count)*100
-                # print('count', left_count, right_count)
-                # print('speed', left, right)
+                print('count', left_count, right_count)
+                print('speed', left, right)
                 if (left_pwm > 0 and right_pwm > 0): set_motors(left, right)
                 else: set_motors(-left, -right)
                 
@@ -152,7 +152,7 @@ def pid_control():
                 # Reset integral when stopped or turning
                 integral = 0
                 last_error = 0
-                reset_encoder()
+                # reset_encoder()
                 set_motors(left_pwm, right_pwm)
                 flag_new_pid_cycle = True
         
