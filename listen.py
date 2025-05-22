@@ -133,8 +133,8 @@ def pid_control():
                 if (left_pwm < 0 and right_pwm < 0): correction = -correction
                 actual_left = left_pwm - correction
                 actual_right = right_pwm + correction
-                print('count', left_count, right_count)
-                print('speed', actual_left, actual_right)
+                # print('count', left_count, right_count)
+                # print('speed', actual_left, actual_right)
                     
                 set_motors(actual_left, actual_right)
                 last_error = error
