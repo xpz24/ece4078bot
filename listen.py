@@ -103,9 +103,9 @@ def pid_control():
     # Only applies for forward/backward, not turning
     global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD
     
-    # integral = 0
-    # last_error = 0
-    # last_time = time.time()
+    integral = 0
+    last_error = 0
+    last_time = time.time()
     flag_new_pid_cycle = True
     while running:
         ### Calculate time delta
@@ -118,31 +118,32 @@ def pid_control():
         else:
             if (left_pwm > 0 and right_pwm > 0) or (left_pwm < 0 and right_pwm < 0):
                 ### Calculate error (difference between encoder counts)
-                # error = left_count - right_count
+                error = left_count - right_count
                 
-                # proportional = KP * error
-                # integral += KI * error * dt
-                # integral = max(-MAX_CORRECTION, min(integral, MAX_CORRECTION))  # Anti-windup
-                # derivative = KD * (error - last_error) / dt if dt > 0 else 0
+                proportional = KP * error
+                integral += KI * error * dt
+                integral = max(-MAX_CORRECTION, min(integral, MAX_CORRECTION))  # Anti-windup
+                derivative = KD * (error - last_error) / dt if dt > 0 else 0
                 
-                # correction = proportional + integral + derivative
-                # correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
+                correction = proportional + integral + derivative
+                correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
                             
-                # if (left_pwm < 0 and right_pwm < 0): correction = -correction
-                # actual_left = left_pwm - correction
-                # actual_right = right_pwm + correction
-                # print('count', left_count, right_count)
-                # print('speed', actual_left, actual_right)
+                if (left_pwm < 0 and right_pwm < 0): correction = -correction
+                actual_left = left_pwm - correction
+                actual_right = right_pwm + correction
+                print('count', left_count, right_count)
+                print('speed', actual_left, actual_right)
                     
-                # set_motors(actual_left, actual_right)
-                # last_error = error
+                set_motors(actual_left, actual_right)
+                last_error = error
                 
-                left, right = abs(left_pwm), abs(right_pwm)
-                if flag_new_pid_cycle:
-                    pid_right = PID(KP, KI, KD, setpoint=left_count, output_limits=(0,1), starting_output=right/100)
-                    flag_new_pid_cycle = False
-                pid_right.setpoint = left_count
-                right = pid_right(right_count)*100
+                # left, right = abs(left_pwm), abs(right_pwm)
+                # if flag_new_pid_cycle:
+                    # pid_right = PID(KP, KI, KD, setpoint=left_count, output_limits=(0,1), starting_output=right/100)
+                    # flag_new_pid_cycle = False
+                # pid_right.setpoint = left_count
+                # right = pid_right(right_count)*100
+                
                 # print('count', left_count, right_count)
                 # print('speed', left, right)
                 if (left_pwm > 0 and right_pwm > 0): set_motors(left, right)
