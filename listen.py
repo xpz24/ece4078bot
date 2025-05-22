@@ -146,8 +146,8 @@ def pid_control():
                 
                 # print('count', left_count, right_count)
                 # print('speed', left, right)
-                if (left_pwm > 0 and right_pwm > 0): set_motors(left, right)
-                else: set_motors(-left, -right)
+                # if (left_pwm > 0 and right_pwm > 0): set_motors(left, right)
+                # else: set_motors(-left, -right)
                 
             else:
                 # Reset integral when stopped or turning
