@@ -106,12 +106,14 @@ def pid_control():
     integral = 0
     last_error = 0
     last_time = time.time()
+    
     flag_new_pid_cycle = True
     while running:
+    
         ### Calculate time delta
-        # current_time = time.time()
-        # dt = current_time - last_time
-        # last_time = current_time
+        current_time = time.time()
+        dt = current_time - last_time
+        last_time = current_time
         
         if not use_PID:
             set_motors(left_pwm, right_pwm)
