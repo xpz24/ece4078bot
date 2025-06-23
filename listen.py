@@ -177,7 +177,7 @@ def pid_control():
             if right_immediate:
                 current_right_pwm = target_right
             
-            # Synchronized ramping - both motors ramp together or not at all
+            # Synchronized ramping - both motors ramp together or not at all.
             if not left_immediate and not right_immediate:
                 if left_needs_ramp or right_needs_ramp:
                     # At least one motor needs ramping - ramp both simultaneously
