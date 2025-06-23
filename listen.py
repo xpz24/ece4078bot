@@ -70,12 +70,10 @@ def setup_gpio():
 def left_encoder_callback(channel):
     global left_count
     left_count += 1
-    # print(left_count)
 
 def right_encoder_callback(channel):
     global right_count
     right_count += 1
-    # print(right_count)
     
 def reset_encoder():
     global left_count, right_count
@@ -107,16 +105,24 @@ def pid_control():
     last_error = 0
     last_time = time.time()
     
-    flag_new_pid_cycle = True
+    # Ramping variables & params
+    current_left_pwm = 0.0
+    current_right_pwm = 0.0
+    previous_left_target = 0
+    previous_right_target = 0
+    RAMP_RATE = 50.0  # PWM units per second (adjust this value to tune ramp speed)
+    MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
+    
     while running:
     
-        ### Calculate time delta
         current_time = time.time()
         dt = current_time - last_time
         last_time = current_time
         
         if not use_PID:
-            set_motors(left_pwm, right_pwm)
+            # set_motors(left_pwm, right_pwm)
+            target_left = left_pwm
+            target_right = right_pwm
         else:
             if (left_pwm > 0 and right_pwm > 0) or (left_pwm < 0 and right_pwm < 0):
                 ### Calculate error (difference between encoder counts)
@@ -126,41 +132,74 @@ def pid_control():
                 integral += KI * error * dt
                 integral = max(-MAX_CORRECTION, min(integral, MAX_CORRECTION))  # Anti-windup
                 derivative = KD * (error - last_error) / dt if dt > 0 else 0
-                
                 correction = proportional + integral + derivative
                 correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
                             
                 if (left_pwm < 0 and right_pwm < 0): correction = -correction
                 actual_left = left_pwm - correction
                 actual_right = right_pwm + correction
-                # print('count', left_count, right_count)
-                # print('speed', actual_left, actual_right)
                     
-                set_motors(actual_left, actual_right)
+                # set_motors(actual_left, actual_right)
+                target_left = left_pwm - correction
+                target_right = right_pwm + correction
+                
                 last_error = error
-                
-                # left, right = abs(left_pwm), abs(right_pwm)
-                # if flag_new_pid_cycle:
-                    # pid_right = PID(KP, KI, KD, setpoint=left_count, output_limits=(0,1), starting_output=right/100)
-                    # flag_new_pid_cycle = False
-                # pid_right.setpoint = left_count
-                # right = pid_right(right_count)*100
-                
-                # print('count', left_count, right_count)
-                # print('speed', left, right)
-                # if (left_pwm > 0 and right_pwm > 0): set_motors(left, right)
-                # else: set_motors(-left, -right)
                 
             else:
                 # Reset integral when stopped or turning
                 integral = 0
                 last_error = 0
                 reset_encoder()
-                set_motors(left_pwm, right_pwm)
-                flag_new_pid_cycle = True
+                # set_motors(left_pwm, right_pwm)
+                target_left = left_pwm
+                target_right = right_pwm
         
-        # Use a smaller delay to make PID more responsive
-        time.sleep(0.005)
+        # PWM Ramping Logic
+        max_change_per_cycle = RAMP_RATE * dt
+        
+        # Left motor ramping
+        left_diff = target_left - current_left_pwm
+        if abs(left_diff) > MIN_RAMP_THRESHOLD:
+            if abs(left_diff) <= max_change_per_cycle:
+                current_left_pwm = target_left  # Close enough, set to target
+            else:
+                # Ramp towards target
+                if left_diff > 0:
+                    current_left_pwm += max_change_per_cycle
+                else:
+                    current_left_pwm -= max_change_per_cycle
+        else:
+            current_left_pwm = target_left  # Small changes applied immediately
+        
+        # Right motor ramping
+        right_diff = target_right - current_right_pwm
+        if abs(right_diff) > MIN_RAMP_THRESHOLD:
+            if abs(right_diff) <= max_change_per_cycle:
+                current_right_pwm = target_right  # Close enough, set to target
+            else:
+                # Ramp towards target
+                if right_diff > 0:
+                    current_right_pwm += max_change_per_cycle
+                else:
+                    current_right_pwm -= max_change_per_cycle
+        else:
+            current_right_pwm = target_right  # Small changes applied immediately
+        
+        # Immediate stop/direction change logic
+        # If target changes sign or goes to zero, apply immediately for safety
+        if (target_left * previous_left_target < 0) or target_left == 0:
+            current_left_pwm = target_left
+        if (target_right * previous_right_target < 0) or target_right == 0:
+            current_right_pwm = target_right
+            
+        # Store previous targets for next iteration
+        previous_left_target = target_left
+        previous_right_target = target_right
+        
+        # Apply the ramped PWM values
+        set_motors(current_left_pwm, current_right_pwm)
+        
+        time.sleep(0.01)
 
 
 def camera_stream_server():
