@@ -155,7 +155,7 @@ def pid_control():
                 target_left = left_pwm
                 target_right = right_pwm
         
-        if use_ramping:
+        if use_ramping and use_PID:
             # PWM Ramping Logic
             max_change_per_cycle = RAMP_RATE * dt
             
