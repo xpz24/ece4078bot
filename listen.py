@@ -111,7 +111,7 @@ def pid_control():
     current_right_pwm = 20
     previous_left_target = 20
     previous_right_target = 20
-    RAMP_RATE = 500  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 800  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
     
     while running:
@@ -158,7 +158,6 @@ def pid_control():
         if use_ramping and use_PID:
             # PWM Ramping Logic
             max_change_per_cycle = RAMP_RATE * dt
-            print(max_change_per_cycle)
             
             # Calculate differences for both motors
             left_diff = target_left - current_left_pwm
