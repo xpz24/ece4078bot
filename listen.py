@@ -37,7 +37,7 @@ left_pwm = 0
 right_pwm = 0
 left_count = 0
 right_count = 0
-use_ramping = False
+use_ramping = True
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -107,11 +107,11 @@ def pid_control():
     last_time = time.time()
     
     # Ramping variables & params
-    current_left_pwm = 25
-    current_right_pwm = 25
-    previous_left_target = 25
-    previous_right_target = 25
-    RAMP_RATE = 500  # PWM units per second (adjust this value to tune ramp speed)
+    current_left_pwm = 20
+    current_right_pwm = 20
+    previous_left_target = 20
+    previous_right_target = 20
+    RAMP_RATE = 300  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
     
     while running:
