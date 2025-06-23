@@ -37,7 +37,7 @@ left_pwm = 0
 right_pwm = 0
 left_count = 0
 right_count = 0
-use_ramping = True
+use_ramping = False
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
