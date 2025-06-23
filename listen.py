@@ -168,36 +168,36 @@ def pid_control():
             left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
             right_needs_ramp = abs(right_diff) > MIN_RAMP_THRESHOLD
             
-            # Check for immediate stop/direction change conditions
-            left_immediate = (target_left * previous_left_target < 0) or target_left == 0
-            right_immediate = (target_right * previous_right_target < 0) or target_right == 0
+            # Check for direction change conditions (but not stops)
+            left_direction_change = (target_left * previous_left_target < 0) and target_left != 0 and previous_left_target != 0
+            right_direction_change = (target_right * previous_right_target < 0) and target_right != 0 and previous_right_target != 0
             
-            # Apply immediate changes for safety (stops and direction changes)
-            if left_immediate:
+            # Apply immediate changes for direction changes only (for safety)
+            if left_direction_change:
                 current_left_pwm = target_left
-            if right_immediate:
+            if right_direction_change:
                 current_right_pwm = target_right
             
-            # Synchronized ramping - both motors ramp together or not at all.
-            if not left_immediate and not right_immediate:
+            # Synchronized ramping - both motors ramp together or not at all
+            if not left_direction_change and not right_direction_change:
                 if left_needs_ramp or right_needs_ramp:
                     # At least one motor needs ramping - ramp both simultaneously
                     
-                    # Left motor ramping
+                    # Left motor ramping (including ramp-down to zero)
                     if abs(left_diff) <= max_change_per_cycle:
                         current_left_pwm = target_left  # Close enough, set to target
                     else:
-                        # Ramp towards target
+                        # Ramp towards target (up or down)
                         if left_diff > 0:
                             current_left_pwm += max_change_per_cycle
                         else:
                             current_left_pwm -= max_change_per_cycle
                     
-                    # Right motor ramping
+                    # Right motor ramping (including ramp-down to zero)
                     if abs(right_diff) <= max_change_per_cycle:
                         current_right_pwm = target_right  # Close enough, set to target
                     else:
-                        # Ramp towards target
+                        # Ramp towards target (up or down)
                         if right_diff > 0:
                             current_right_pwm += max_change_per_cycle
                         else:
