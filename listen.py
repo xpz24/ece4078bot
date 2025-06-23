@@ -159,41 +159,53 @@ def pid_control():
             # PWM Ramping Logic
             max_change_per_cycle = RAMP_RATE * dt
             
-            # Left motor ramping
+            # Calculate differences for both motors
             left_diff = target_left - current_left_pwm
-            if abs(left_diff) > MIN_RAMP_THRESHOLD:
-                if abs(left_diff) <= max_change_per_cycle:
-                    current_left_pwm = target_left  # Close enough, set to target
-                else:
-                    # Ramp towards target
-                    if left_diff > 0:
-                        current_left_pwm += max_change_per_cycle
-                    else:
-                        current_left_pwm -= max_change_per_cycle
-            else:
-                current_left_pwm = target_left  # Small changes applied immediately
-            
-            # Right motor ramping
             right_diff = target_right - current_right_pwm
-            if abs(right_diff) > MIN_RAMP_THRESHOLD:
-                if abs(right_diff) <= max_change_per_cycle:
-                    current_right_pwm = target_right  # Close enough, set to target
-                else:
-                    # Ramp towards target
-                    if right_diff > 0:
-                        current_right_pwm += max_change_per_cycle
-                    else:
-                        current_right_pwm -= max_change_per_cycle
-            else:
-                current_right_pwm = target_right  # Small changes applied immediately
             
-            # Immediate stop/direction change logic
-            # If target changes sign or goes to zero, apply immediately for safety
-            if (target_left * previous_left_target < 0) or target_left == 0:
+            # Determine if either motor needs ramping
+            left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
+            right_needs_ramp = abs(right_diff) > MIN_RAMP_THRESHOLD
+            
+            # Check for immediate stop/direction change conditions
+            left_immediate = (target_left * previous_left_target < 0) or target_left == 0
+            right_immediate = (target_right * previous_right_target < 0) or target_right == 0
+            
+            # Apply immediate changes for safety (stops and direction changes)
+            if left_immediate:
                 current_left_pwm = target_left
-            if (target_right * previous_right_target < 0) or target_right == 0:
+            if right_immediate:
                 current_right_pwm = target_right
-                
+            
+            # Synchronized ramping - both motors ramp together or not at all
+            if not left_immediate and not right_immediate:
+                if left_needs_ramp or right_needs_ramp:
+                    # At least one motor needs ramping - ramp both simultaneously
+                    
+                    # Left motor ramping
+                    if abs(left_diff) <= max_change_per_cycle:
+                        current_left_pwm = target_left  # Close enough, set to target
+                    else:
+                        # Ramp towards target
+                        if left_diff > 0:
+                            current_left_pwm += max_change_per_cycle
+                        else:
+                            current_left_pwm -= max_change_per_cycle
+                    
+                    # Right motor ramping
+                    if abs(right_diff) <= max_change_per_cycle:
+                        current_right_pwm = target_right  # Close enough, set to target
+                    else:
+                        # Ramp towards target
+                        if right_diff > 0:
+                            current_right_pwm += max_change_per_cycle
+                        else:
+                            current_right_pwm -= max_change_per_cycle
+                else:
+                    # Neither motor needs ramping - apply targets directly
+                    current_left_pwm = target_left
+                    current_right_pwm = target_right
+            
             # Store previous targets for next iteration
             previous_left_target = target_left
             previous_right_target = target_right
