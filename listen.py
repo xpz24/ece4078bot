@@ -110,7 +110,7 @@ def pid_control():
     current_right_pwm = 0.0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 80.0  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 100  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
     
     while running:
