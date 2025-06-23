@@ -107,11 +107,11 @@ def pid_control():
     last_time = time.time()
     
     # Ramping variables & params
-    current_left_pwm = 20
-    current_right_pwm = 20
-    previous_left_target = 0
-    previous_right_target = 0
-    RAMP_RATE = 80  # PWM units per second (adjust this value to tune ramp speed)
+    current_left_pwm = 25
+    current_right_pwm = 25
+    previous_left_target = 25
+    previous_right_target = 25
+    RAMP_RATE = 90  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
     
     while running:
