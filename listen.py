@@ -158,6 +158,7 @@ def pid_control():
         if use_ramping and use_PID:
             # PWM Ramping Logic
             max_change_per_cycle = RAMP_RATE * dt
+            print(max_change_per_cycle)
             
             # Calculate differences for both motors
             left_diff = target_left - current_left_pwm
