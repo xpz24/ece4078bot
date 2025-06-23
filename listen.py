@@ -37,6 +37,7 @@ left_pwm = 0
 right_pwm = 0
 left_count = 0
 right_count = 0
+use_ramping = False
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -110,7 +111,7 @@ def pid_control():
     current_right_pwm = 0.0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 70  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 90  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
     
     while running:
@@ -154,47 +155,53 @@ def pid_control():
                 target_left = left_pwm
                 target_right = right_pwm
         
-        # PWM Ramping Logic
-        max_change_per_cycle = RAMP_RATE * dt
-        
-        # Left motor ramping
-        left_diff = target_left - current_left_pwm
-        if abs(left_diff) > MIN_RAMP_THRESHOLD:
-            if abs(left_diff) <= max_change_per_cycle:
-                current_left_pwm = target_left  # Close enough, set to target
-            else:
-                # Ramp towards target
-                if left_diff > 0:
-                    current_left_pwm += max_change_per_cycle
-                else:
-                    current_left_pwm -= max_change_per_cycle
-        else:
-            current_left_pwm = target_left  # Small changes applied immediately
-        
-        # Right motor ramping
-        right_diff = target_right - current_right_pwm
-        if abs(right_diff) > MIN_RAMP_THRESHOLD:
-            if abs(right_diff) <= max_change_per_cycle:
-                current_right_pwm = target_right  # Close enough, set to target
-            else:
-                # Ramp towards target
-                if right_diff > 0:
-                    current_right_pwm += max_change_per_cycle
-                else:
-                    current_right_pwm -= max_change_per_cycle
-        else:
-            current_right_pwm = target_right  # Small changes applied immediately
-        
-        # Immediate stop/direction change logic
-        # If target changes sign or goes to zero, apply immediately for safety
-        if (target_left * previous_left_target < 0) or target_left == 0:
-            current_left_pwm = target_left
-        if (target_right * previous_right_target < 0) or target_right == 0:
-            current_right_pwm = target_right
+        if use_ramping:
+            # PWM Ramping Logic
+            max_change_per_cycle = RAMP_RATE * dt
             
-        # Store previous targets for next iteration
-        previous_left_target = target_left
-        previous_right_target = target_right
+            # Left motor ramping
+            left_diff = target_left - current_left_pwm
+            if abs(left_diff) > MIN_RAMP_THRESHOLD:
+                if abs(left_diff) <= max_change_per_cycle:
+                    current_left_pwm = target_left  # Close enough, set to target
+                else:
+                    # Ramp towards target
+                    if left_diff > 0:
+                        current_left_pwm += max_change_per_cycle
+                    else:
+                        current_left_pwm -= max_change_per_cycle
+            else:
+                current_left_pwm = target_left  # Small changes applied immediately
+            
+            # Right motor ramping
+            right_diff = target_right - current_right_pwm
+            if abs(right_diff) > MIN_RAMP_THRESHOLD:
+                if abs(right_diff) <= max_change_per_cycle:
+                    current_right_pwm = target_right  # Close enough, set to target
+                else:
+                    # Ramp towards target
+                    if right_diff > 0:
+                        current_right_pwm += max_change_per_cycle
+                    else:
+                        current_right_pwm -= max_change_per_cycle
+            else:
+                current_right_pwm = target_right  # Small changes applied immediately
+            
+            # Immediate stop/direction change logic
+            # If target changes sign or goes to zero, apply immediately for safety
+            if (target_left * previous_left_target < 0) or target_left == 0:
+                current_left_pwm = target_left
+            if (target_right * previous_right_target < 0) or target_right == 0:
+                current_right_pwm = target_right
+                
+            # Store previous targets for next iteration
+            previous_left_target = target_left
+            previous_right_target = target_right
+        
+        else:
+            # Ramping disabled - apply target values directly
+            current_left_pwm = target_left
+            current_right_pwm = target_right
         
         # Apply the ramped PWM values
         set_motors(current_left_pwm, current_right_pwm)
