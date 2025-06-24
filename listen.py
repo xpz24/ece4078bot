@@ -85,6 +85,7 @@ def set_motors(left, right):
     global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
     if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
+        print('Pre-starting..')
         if current_movement  == 'forward':
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -95,8 +96,8 @@ def set_motors(left, right):
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
             GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
             GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        left_motor_pwm.ChangeDutyCycle(70)
-        right_motor_pwm.ChangeDutyCycle(70)
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
