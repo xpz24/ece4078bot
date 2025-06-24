@@ -84,7 +84,7 @@ def reset_encoder():
 def set_motors(left, right):
     global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
-    if prev_movement == 'stop':
+    if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
         if current_movement  == 'forward':
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
