@@ -137,7 +137,7 @@ def pid_control():
     current_right_pwm = 0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 200  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
     MIN_PWM_THRESHOLD = 15
     
@@ -244,11 +244,11 @@ def pid_control():
             current_left_pwm = target_left
             current_right_pwm = target_right
             
-        # final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
-        # final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
+        final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
+        final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
         
         # Apply the ramped PWM values
-        set_motors(current_left_pwm, current_right_pwm)
+        set_motors(final_left_pwm, final_right_pwm)
         if current_left_pwm != 0:
             print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
