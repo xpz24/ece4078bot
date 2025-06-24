@@ -81,10 +81,11 @@ def set_motors(left, right):
     global start_movement
     # Pre-Start Kick (Motor Priming)
     if start_movement and left*right > 0:
+        print('burst')
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         start_movement = False
-        time.sleep(0.05)
+        time.sleep(0.1)
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
