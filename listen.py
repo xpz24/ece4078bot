@@ -81,36 +81,31 @@ def reset_encoder():
     left_count, right_count = 0, 0
 
 def set_motors(left, right):
-    # Right Motor
-    if right > 0:
-        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-        GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-        right_motor_pwm.ChangeDutyCycle(min(right, 100))
-    elif right < 0:
-        GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
-        GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-        right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
-    else:
-        # Brake mode
+    if right == 0 and left == 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         right_motor_pwm.ChangeDutyCycle(100)
-
-    # Left Motor
-    if left > 0:
-        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-        GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-        left_motor_pwm.ChangeDutyCycle(min(left, 100))
-    elif left < 0:
-        GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
-        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
-    else:
-        # Brake mode
-        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         left_motor_pwm.ChangeDutyCycle(100)
-
+    
+    else:
+        if right > 0:
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+        else:
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+        
+        if left > 0:
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        else:
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        
+        left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
+        right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
     
 def apply_min_threshold(pwm_value, min_threshold):
     """Apply minimum PWM threshold to ensure motors can respond reliably"""
