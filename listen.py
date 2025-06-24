@@ -247,7 +247,7 @@ def pid_control():
         # final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
         
         # Apply the ramped PWM values
-        set_motors(final_left_pwm, current_right_pwm)
+        set_motors(current_left_pwm, current_right_pwm)
         if current_left_pwm != 0:
             print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
