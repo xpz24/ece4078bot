@@ -33,8 +33,8 @@ MAX_CORRECTION = 20  # Maximum PWM correction value
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
-use_ramping = False
-starting = True
+use_ramping = True
+start_movement = True
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -78,12 +78,13 @@ def reset_encoder():
     left_count, right_count = 0, 0
 
 def set_motors(left, right):
-    global starting
-    if starting and left*right > 0:
+    global start_movement
+    # Pre-Start Kick (Motor Priming)
+    if start_movement and left*right > 0:
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
-        starting = False
-        time.sleep(0.05)  # 50 ms boost
+        start_movement = False
+        time.sleep(0.05)
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
@@ -125,7 +126,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, starting
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, start_movement
     
     integral = 0
     last_error = 0
@@ -136,9 +137,9 @@ def pid_control():
     current_right_pwm = 0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 200  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
-    MIN_PWM_THRESHOLD = 0
+    MIN_PWM_THRESHOLD = 15
     
     while running:
     
@@ -180,7 +181,7 @@ def pid_control():
                 # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
-                starting = True
+                start_movement = True
         
         if use_ramping and use_PID:
             # PWM Ramping Logic
