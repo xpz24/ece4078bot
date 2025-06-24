@@ -26,18 +26,15 @@ RIGHT_ENCODER = 16
 
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
-KP = 0.5
-KI = 0.1
-KD = 0.01
+KP, Ki, KD = 0, 0, 0
 MAX_CORRECTION = 20  # Maximum PWM correction value
 
 # Global variables
 running = True
-left_pwm = 0
-right_pwm = 0
-left_count = 0
-right_count = 0
-use_ramping = True
+left_pwm, right_pwm = 0, 0
+left_count, right_count = 0, 0
+use_ramping = False
+starting = True
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -81,31 +78,40 @@ def reset_encoder():
     left_count, right_count = 0, 0
 
 def set_motors(left, right):
-    if right == 0 and left == 0:
+    global starting
+    if starting:
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        starting = False
+        time.sleep(0.05)  # 50 ms boost
+
+    # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
+    if right > 0:
+        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+        GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+        right_motor_pwm.ChangeDutyCycle(min(right, 100))
+    elif right < 0:
+        GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+        GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+        right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
+    else:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+        right_motor_pwm.ChangeDutyCycle(100)
+
+    if left > 0:
+        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        left_motor_pwm.ChangeDutyCycle(min(left, 100))
+    elif left < 0:
+        GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
+    else:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        right_motor_pwm.ChangeDutyCycle(100)
         left_motor_pwm.ChangeDutyCycle(100)
-    
-    else:
-        if right > 0:
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-        else:
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-        
-        if left > 0:
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-        else:
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        
-        left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
-        right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
+
     
 def apply_min_threshold(pwm_value, min_threshold):
     """Apply minimum PWM threshold to ensure motors can respond reliably"""
@@ -119,7 +125,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, starting
     
     integral = 0
     last_error = 0
@@ -174,6 +180,7 @@ def pid_control():
                 # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
+                starting = True
         
         if use_ramping and use_PID:
             # PWM Ramping Logic
@@ -236,11 +243,11 @@ def pid_control():
             current_left_pwm = target_left
             current_right_pwm = target_right
             
-        final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
-        final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
+        # final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
+        # final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
         
         # Apply the ramped PWM values
-        set_motors(final_left_pwm, final_right_pwm)
+        set_motors(final_left_pwm, current_right_pwm)
         if current_left_pwm != 0:
             print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
