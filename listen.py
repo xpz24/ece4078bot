@@ -97,6 +97,16 @@ def set_motors(left, right):
     
     left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
     right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
+    
+def apply_min_threshold(pwm_value, min_threshold):
+    """Apply minimum PWM threshold to ensure motors can respond reliably"""
+    if pwm_value == 0:
+        return 0  # Zero means stop
+    elif abs(pwm_value) < min_threshold:
+        # Boost small values to minimum threshold, preserving direction
+        return min_threshold if pwm_value > 0 else -min_threshold
+    else:
+        return pwm_value
 
 def pid_control():
     # Only applies for forward/backward, not turning
@@ -111,8 +121,9 @@ def pid_control():
     current_right_pwm = 0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 200  # PWM units per second (adjust this value to tune ramp speed)
+    RAMP_RATE = 50  # PWM units per second (adjust this value to tune ramp speed)
     MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
+    MIN_PWM_THRESHOLD = 20
     
     while running:
     
@@ -215,9 +226,12 @@ def pid_control():
             # Ramping disabled - apply target values directly
             current_left_pwm = target_left
             current_right_pwm = target_right
+            
+        final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
+        final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
         
         # Apply the ramped PWM values
-        set_motors(current_left_pwm, current_right_pwm)
+        set_motors(final_left_pwm, final_right_pwm)
         if current_left_pwm != 0:
             print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
