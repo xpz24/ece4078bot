@@ -112,7 +112,7 @@ def pid_control():
     previous_left_target = 0
     previous_right_target = 0
     RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
-    MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
+    MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
     
     while running:
     
@@ -180,6 +180,7 @@ def pid_control():
             # Synchronized ramping - both motors ramp together or not at all
             if not left_direction_change and not right_direction_change:
                 if left_needs_ramp or right_needs_ramp:
+                print('Ramping...')
                     # At least one motor needs ramping - ramp both simultaneously
                     
                     # Left motor ramping (including ramp-down to zero)
