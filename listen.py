@@ -180,7 +180,7 @@ def pid_control():
             # Synchronized ramping - both motors ramp together or not at all
             if not left_direction_change and not right_direction_change:
                 if left_needs_ramp or right_needs_ramp:
-                print('Ramping...')
+                    print('Ramping...')
                     # At least one motor needs ramping - ramp both simultaneously
                     
                     # Left motor ramping (including ramp-down to zero)
