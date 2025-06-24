@@ -34,7 +34,8 @@ running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
 use_ramping = True
-start_movement = True
+current_movement = 'stop'
+prev_movement = 'stop'
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -78,13 +79,12 @@ def reset_encoder():
     left_count, right_count = 0, 0
 
 def set_motors(left, right):
-    global start_movement
+    global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
-    if start_movement and left*right > 0:
+    if prev_movement == 'stop' and current_movement in ['forward','backward']:
         print('burst')
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
-        start_movement = False
         time.sleep(0.1)
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
@@ -127,7 +127,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, start_movement
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement
     
     integral = 0
     last_error = 0
@@ -148,12 +148,18 @@ def pid_control():
         dt = current_time - last_time
         last_time = current_time
         
+        prev_movement = current_movement
+        if (left_pwm > 0 and right_pwm > 0): current_movement = 'forward'
+        elif (left_pwm < 0 and right_pwm < 0): current_movement = 'backward'
+        elif (left_pwm == 0 and right_pwm == 0): current_movement = 'stop'
+        else: current_movement = 'turn'
+        
         if not use_PID:
             # set_motors(left_pwm, right_pwm)
             target_left = left_pwm
             target_right = right_pwm
         else:
-            if (left_pwm > 0 and right_pwm > 0) or (left_pwm < 0 and right_pwm < 0):
+            if current_movement == 'forward' or current_movement == 'backward':
                 ### Calculate error (difference between encoder counts)
                 error = left_count - right_count
                 
@@ -182,7 +188,6 @@ def pid_control():
                 # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
-                start_movement = True
         
         if use_ramping and use_PID:
             # PWM Ramping Logic
