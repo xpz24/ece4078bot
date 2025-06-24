@@ -34,6 +34,9 @@ running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
 use_ramping = True
+RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
+MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
+MIN_PWM_THRESHOLD = 15
 current_movement = 'stop'
 prev_movement = 'stop'
 
@@ -81,8 +84,17 @@ def reset_encoder():
 def set_motors(left, right):
     global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
-    if prev_movement == 'stop' and current_movement in ['forward','backward']:
-        print('burst')
+    if prev_movement == 'stop':
+        if current_movement  == 'forward':
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        elif current_movement == 'backward':
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.1)
@@ -138,9 +150,6 @@ def pid_control():
     current_right_pwm = 0
     previous_left_target = 0
     previous_right_target = 0
-    RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
-    MIN_RAMP_THRESHOLD = 10  # Only ramp if change is greater than this
-    MIN_PWM_THRESHOLD = 15
     
     while running:
     
