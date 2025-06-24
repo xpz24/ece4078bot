@@ -79,7 +79,7 @@ def reset_encoder():
 
 def set_motors(left, right):
     global starting
-    if starting:
+    if starting and left*right > 0:
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         starting = False
