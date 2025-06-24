@@ -217,6 +217,7 @@ def pid_control():
         
         # Apply the ramped PWM values
         set_motors(current_left_pwm, current_right_pwm)
+        print(current_left_pwm, current_right_pwm)
         
         time.sleep(0.01)
 
@@ -342,7 +343,7 @@ def wheel_server():
                     
                     # Unpack speed values and convert to PWM
                     left_speed, right_speed = struct.unpack("!ff", data)
-                    print(f"Received wheel: left_speed={left_speed:.4f}, right_speed={right_speed:.4f}")
+                    # print(f"Received wheel: left_speed={left_speed:.4f}, right_speed={right_speed:.4f}")
                     left_pwm, right_pwm = left_speed*100, right_speed*100
                     
                     # Send encoder counts back
