@@ -217,7 +217,7 @@ def pid_control():
         
         # Apply the ramped PWM values
         set_motors(current_left_pwm, current_right_pwm)
-        print(current_left_pwm, current_right_pwm)
+        if current_left_pwm != 0: print(current_left_pwm, current_right_pwm)
         
         time.sleep(0.01)
 
