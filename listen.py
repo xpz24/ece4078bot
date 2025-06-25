@@ -42,7 +42,7 @@ prev_movement = 'stop'
 
 last_left_time = 0
 last_right_time = 0
-DEBOUNCE_TIME = 0.01  # 10ms debounce
+DEBOUNCE_TIME = 0.05  # 10ms debounce
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -206,7 +206,7 @@ def pid_control():
                 # Reset integral when stopped or turning
                 integral = 0
                 last_error = 0
-                # reset_encoder()
+                reset_encoder()
                 # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
