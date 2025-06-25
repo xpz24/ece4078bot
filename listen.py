@@ -39,11 +39,10 @@ MIN_RAMP_THRESHOLD = 15  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 15
 current_movement = 'stop'
 prev_movement = 'stop'
-prev_right, prev_left = 0, 0
 
 last_left_time = 0
 last_right_time = 0
-DEBOUNCE_TIME = 0
+DEBOUNCE_TIME = 0.01
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -99,7 +98,7 @@ def reset_encoder():
     left_count, right_count = 0, 0
 
 def set_motors(left, right):
-    global prev_movement, current_movement, prev_right, prev_left
+    global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
     # if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
         # print('Pre-starting..')
@@ -119,10 +118,8 @@ def set_motors(left, right):
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
-        if prev_right <= 0:
-            print('hi')
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+        GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
         right_motor_pwm.ChangeDutyCycle(min(right, 100))
     elif right < 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
@@ -134,10 +131,8 @@ def set_motors(left, right):
         right_motor_pwm.ChangeDutyCycle(100)
 
     if left > 0:
-        if prev_left <= 0:
-            print('hihi')
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
         left_motor_pwm.ChangeDutyCycle(min(left, 100))
     elif left < 0:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
@@ -148,8 +143,6 @@ def set_motors(left, right):
         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         left_motor_pwm.ChangeDutyCycle(100)
     
-    prev_right, prev_left = right, left
-
     
 def apply_min_threshold(pwm_value, min_threshold):
     """Apply minimum PWM threshold to ensure motors can respond reliably"""
