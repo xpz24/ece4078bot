@@ -78,7 +78,7 @@ def left_encoder_callback(channel):
     global left_count, last_left_time, max_left
     current_time = time.time()
     tmp = current_time - last_left_time
-    if 10 > tmp > > max_left: max_left = tmp
+    if 10 > tmp > max_left: max_left = tmp
     print('left', max_left)
     if current_time - last_left_time > DEBOUNCE_TIME:
         left_count += 1
