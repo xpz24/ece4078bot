@@ -92,10 +92,10 @@ def right_encoder_callback(channel):
     elapsed = current_time - last_right_time
     # if 0.5 > tmp > max_right: max_right = tmp
     # print('right', tmp)
+    print('right', elapsed)
     if elapsed > DEBOUNCE_TIME:
         right_count += 1
         last_right_time = current_time
-        print('right', elapsed)
     
     
 def reset_encoder():
