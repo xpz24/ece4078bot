@@ -89,7 +89,7 @@ def left_encoder_callback(channel):
 def right_encoder_callback(channel):
     global right_count, last_right_time, max_right
     current_time = time.time()
-    elapsed = current_time - last_left_time
+    elapsed = current_time - last_right_time
     # if 0.5 > tmp > max_right: max_right = tmp
     # print('right', tmp)
     if elapsed > DEBOUNCE_TIME:
