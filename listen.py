@@ -72,10 +72,12 @@ def setup_gpio():
 def left_encoder_callback(channel):
     global left_count
     left_count += 1
+    print('left', left_count)
 
 def right_encoder_callback(channel):
     global right_count
     right_count += 1
+    print('right', left_count)
     
 def reset_encoder():
     global left_count, right_count
@@ -265,8 +267,8 @@ def pid_control():
         
         # Apply the ramped PWM values
         set_motors(final_left_pwm, final_right_pwm)
-        if current_left_pwm != 0:
-            print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
+        # if current_left_pwm != 0:
+            # print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
         time.sleep(0.01)
 
