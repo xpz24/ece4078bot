@@ -43,6 +43,7 @@ prev_movement = 'stop'
 last_left_time = 0
 last_right_time = 0
 DEBOUNCE_TIME = 0.05  # 10ms debounce
+max_left, max_right = 0, 0
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -63,8 +64,8 @@ def setup_gpio():
     # Encoder setup and interrupt (both activated and deactivated)
     GPIO.setup(LEFT_ENCODER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(RIGHT_ENCODER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(LEFT_ENCODER, GPIO.FALLING, callback=left_encoder_callback)
-    GPIO.add_event_detect(RIGHT_ENCODER, GPIO.FALLING, callback=right_encoder_callback)
+    GPIO.add_event_detect(LEFT_ENCODER, GPIO.BOTH, callback=left_encoder_callback)
+    GPIO.add_event_detect(RIGHT_ENCODER, GPIO.BOTH, callback=right_encoder_callback)
     
     # Initialize PWM (frequency: 100Hz)
     global left_motor_pwm, right_motor_pwm
@@ -74,18 +75,22 @@ def setup_gpio():
     right_motor_pwm.start(0)
 
 def left_encoder_callback(channel):
-    global left_count, last_left_time
+    global left_count, last_left_time, max_left
     current_time = time.time()
-    print('left', current_time - last_left_time)
+    tmp = current_time - last_left_time
+    if tmp > max_left: max_left = tmp
+    print('left', max_left)
     if current_time - last_left_time > DEBOUNCE_TIME:
         left_count += 1
         last_left_time = current_time
     
 
 def right_encoder_callback(channel):
-    global right_count, last_right_time
+    global right_count, last_right_time, max_right
     current_time = time.time()
-    print('right', current_time - last_left_time)
+    tmp = current_time - last_left_time
+    if tmp > max_right: max_right = tmp
+    print('right', max_right)
     if current_time - last_right_time > DEBOUNCE_TIME:
         right_count += 1
         last_right_time = current_time
