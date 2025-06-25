@@ -118,6 +118,7 @@ def set_motors(left, right):
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
+        pass
         # GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         # GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
         # right_motor_pwm.ChangeDutyCycle(min(right, 100))
@@ -131,6 +132,7 @@ def set_motors(left, right):
         right_motor_pwm.ChangeDutyCycle(100)
 
     if left > 0:
+        pass
         # GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
         # GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
         # left_motor_pwm.ChangeDutyCycle(min(left, 100))
