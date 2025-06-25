@@ -77,7 +77,7 @@ def left_encoder_callback(channel):
 def right_encoder_callback(channel):
     global right_count
     right_count += 1
-    print('left')
+    print('right')
     
 def reset_encoder():
     global left_count, right_count
