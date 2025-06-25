@@ -40,6 +40,10 @@ MIN_PWM_THRESHOLD = 15
 current_movement = 'stop'
 prev_movement = 'stop'
 
+last_left_time = 0
+last_right_time = 0
+DEBOUNCE_TIME = 0.01  # 10ms debounce
+
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
@@ -70,14 +74,20 @@ def setup_gpio():
     right_motor_pwm.start(0)
 
 def left_encoder_callback(channel):
-    global left_count
-    left_count += 1
-    print('left')
+    global left_count, last_left_time
+    current_time = time.time()
+    if current_time - last_left_time > DEBOUNCE_TIME:
+        left_count += 1
+        last_left_time = current_time
+    print('left', left_count)
 
 def right_encoder_callback(channel):
-    global right_count
-    right_count += 1
-    print('right')
+    global right_count, last_right_time
+    current_time = time.time()
+    if current_time - last_right_time > DEBOUNCE_TIME:
+        right_count += 1
+        last_right_time = current_time
+    print('right', right_count)
     
 def reset_encoder():
     global left_count, right_count
