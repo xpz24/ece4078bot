@@ -206,7 +206,7 @@ def pid_control():
                 # Reset integral when stopped or turning
                 integral = 0
                 last_error = 0
-                reset_encoder()
+                # reset_encoder()
                 # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
