@@ -42,7 +42,7 @@ prev_movement = 'stop'
 
 last_left_time = 0
 last_right_time = 0
-DEBOUNCE_TIME = 0.01
+DEBOUNCE_TIME = 0
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
