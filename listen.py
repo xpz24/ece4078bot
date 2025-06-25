@@ -77,23 +77,25 @@ def setup_gpio():
 def left_encoder_callback(channel):
     global left_count, last_left_time, max_left
     current_time = time.time()
-    tmp = current_time - last_left_time
-    if 0.5 > tmp > max_left: max_left = tmp
-    print('left', tmp)
-    if current_time - last_left_time > DEBOUNCE_TIME:
+    elapsed = current_time - last_left_time
+    # if 0.5 > tmp > max_left: max_left = tmp
+    # print('left', tmp)
+    if elapsed > DEBOUNCE_TIME:
         left_count += 1
         last_left_time = current_time
+        print('left', elapsed)
     
 
 def right_encoder_callback(channel):
     global right_count, last_right_time, max_right
     current_time = time.time()
-    tmp = current_time - last_left_time
-    if 0.5 > tmp > max_right: max_right = tmp
-    print('right', tmp)
-    if current_time - last_right_time > DEBOUNCE_TIME:
+    elapsed = current_time - last_left_time
+    # if 0.5 > tmp > max_right: max_right = tmp
+    # print('right', tmp)
+    if elapsed > DEBOUNCE_TIME:
         right_count += 1
         last_right_time = current_time
+        print('right', elapsed)
     
     
 def reset_encoder():
