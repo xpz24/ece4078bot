@@ -45,7 +45,7 @@ last_left_time = 0
 last_right_time = 0
 prev_left_state = None
 prev_right_state = None
-DEBOUNCE_TIME = 0.0
+DEBOUNCE_TIME = 0
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -214,8 +214,8 @@ def pid_control():
     
     while running:
         
-        print(len(left_arr), ' left mean', np.percentile(left_arr, 25))
-        print(len(right_arr), ' right mean', np.percentile(right_arr, 25))
+        print(len(left_arr), ' left mean', np.percentile(left_arr, 25), np.percentile(left_arr, 1))
+        print(len(right_arr), ' right mean', np.percentile(right_arr, 25), np.percentile(right_arr, 1))
         
         current_time = monotonic()
         dt = current_time - last_time
