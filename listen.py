@@ -69,8 +69,8 @@ def setup_gpio():
     
     # Initialize PWM (frequency: 100Hz)
     global left_motor_pwm, right_motor_pwm
-    left_motor_pwm = GPIO.PWM(LEFT_MOTOR_ENB, 500)
-    right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 500)
+    left_motor_pwm = GPIO.PWM(LEFT_MOTOR_ENB, 100)
+    right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 100)
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
@@ -135,7 +135,8 @@ def set_motors(left, right):
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
         right_motor_pwm.ChangeDutyCycle(100)
-
+    
+    time.sleep(0.0001)
     if left > 0:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
         GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
