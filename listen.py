@@ -76,7 +76,7 @@ def left_encoder_callback(channel):
     
     # Real state change. Without this, false positive happens due to electrical noise
     # After testing, debouncing not needed
-    if (prev_left_state is not None and current_state != prev_left_state        
+    if (prev_left_state is not None and current_state != prev_left_state):       
         left_count += 1
         prev_left_state = current_state
     
@@ -88,7 +88,7 @@ def right_encoder_callback(channel):
     global right_count, prev_right_state, prev_right_time
     current_state = GPIO.input(RIGHT_ENCODER)
     
-    if (prev_right_state is not None and current_state != prev_right_state: 
+    if (prev_right_state is not None and current_state != prev_right_state): 
         right_count += 1
         prev_right_state = current_state
         
