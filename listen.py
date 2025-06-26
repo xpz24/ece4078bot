@@ -64,8 +64,8 @@ def setup_gpio():
     # Encoder setup and interrupt (both activated and deactivated)
     GPIO.setup(LEFT_ENCODER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(RIGHT_ENCODER, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(LEFT_ENCODER, GPIO.RISING, callback=left_encoder_callback)
-    GPIO.add_event_detect(RIGHT_ENCODER, GPIO.RISING, callback=right_encoder_callback)
+    GPIO.add_event_detect(LEFT_ENCODER, GPIO.RISING, callback=left_encoder_callback, bouncetime=10)
+    GPIO.add_event_detect(RIGHT_ENCODER, GPIO.RISING, callback=right_encoder_callback, bouncetime=10)
     
     # Initialize PWM (frequency: 100Hz)
     global left_motor_pwm, right_motor_pwm
