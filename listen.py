@@ -126,11 +126,11 @@ def set_motors(left, right):
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-        # right_motor_pwm.ChangeDutyCycle(min(right, 100))
+        right_motor_pwm.ChangeDutyCycle(min(right, 100))
     elif right < 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-        # right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
+        right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
     else:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
@@ -139,11 +139,11 @@ def set_motors(left, right):
     if left > 0:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
         GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-        # left_motor_pwm.ChangeDutyCycle(min(left, 100))
+        left_motor_pwm.ChangeDutyCycle(min(left, 100))
     elif left < 0:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        # left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
+        left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
     else:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
