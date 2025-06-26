@@ -76,9 +76,9 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-left_min, right_min = 999, 999
+left_arr, right_arr = [0.1], [0.1]
 def left_encoder_callback(channel):
-    global left_count, prev_left_state, last_left_time, left_min
+    global left_count, prev_left_state, last_left_time, left_arr
     
     current_time = monotonic()
     current_state = GPIO.input(LEFT_ENCODER)
@@ -91,9 +91,7 @@ def left_encoder_callback(channel):
         left_count += 1
         prev_left_state = current_state
         last_left_time = current_time
-        if elapsed < left_min:
-            left_min = elapsed
-            print('left', left_min)
+        left_arr.append(elapsed)
     
     elif prev_left_state is None:
         # First reading
@@ -101,7 +99,7 @@ def left_encoder_callback(channel):
         last_left_time = current_time
 
 def right_encoder_callback(channel):
-    global right_count, prev_right_state, last_right_time, right_min
+    global right_count, prev_right_state, last_right_time, right_arr
     
     current_time = monotonic()
     current_state = GPIO.input(RIGHT_ENCODER)
@@ -114,9 +112,7 @@ def right_encoder_callback(channel):
         right_count += 1
         prev_right_state = current_state
         last_right_time = current_time
-        if elapsed < right_min:
-            right_min = elapsed
-            print('right', right_min)
+        right_arr.append(elapsed)
         
     elif prev_right_state is None:
         prev_right_state = current_state
@@ -204,7 +200,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement, left_arr, right_arr
     
     integral = 0
     last_error = 0
@@ -217,7 +213,10 @@ def pid_control():
     previous_right_target = 0
     
     while running:
-    
+        
+        print('left mean', np.percentile(left_arr, 20))
+        print('right mean', np.percentile(right_arr, 20))
+        
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
