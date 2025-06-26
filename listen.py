@@ -175,6 +175,7 @@ def pid_control():
     previous_right_target = 0
     
     while running:
+        print(f'left: {GPIO.input(LEFT_ENCODER)}, right: {GPIO.input(RIGHT_ENCODER)}')
     
         current_time = monotonic()
         dt = current_time - last_time
@@ -288,8 +289,8 @@ def pid_control():
         # Apply the ramped PWM values
         set_motors(final_left_pwm, final_right_pwm)
         if current_left_pwm != 0:
-            print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
-            print(f'left: {GPIO.input(LEFT_ENCODER)}, right: {GPIO.input(RIGHT_ENCODER)}')
+            # print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
+        
 
         
         time.sleep(0.01)
