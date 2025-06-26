@@ -76,20 +76,24 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-
+left_min, right_min = 999, 999
 def left_encoder_callback(channel):
     global left_count, prev_left_state, last_left_time
     
     current_time = monotonic()
     current_state = GPIO.input(LEFT_ENCODER)
+    elapsed = current_time - last_left_time
     
     if (prev_left_state is not None and 
         current_state != prev_left_state and  # Real state change
-        current_time - last_left_time > DEBOUNCE_TIME):  # Not too fast
+        elapsed > DEBOUNCE_TIME):  # Not too fast
         
         left_count += 1
         prev_left_state = current_state
         last_left_time = current_time
+        if elapsed < left_min:
+            left_min = elapsed
+            print('left', left_min)
     
     elif prev_left_state is None:
         # First reading
@@ -101,14 +105,19 @@ def right_encoder_callback(channel):
     
     current_time = monotonic()
     current_state = GPIO.input(RIGHT_ENCODER)
+    elapsed = current_time - last_left_time
     
     if (prev_right_state is not None and 
         current_state != prev_right_state and
-        current_time - last_right_time > DEBOUNCE_TIME):
+        elapsed = current_time - last_left_time > DEBOUNCE_TIME):
         
         right_count += 1
         prev_right_state = current_state
         last_right_time = current_time
+        if elapsed < right_min:
+            right_min = elapsed
+            print('right', right_min)
+        
     elif prev_right_state is None:
         prev_right_state = current_state
         last_right_time = current_time
