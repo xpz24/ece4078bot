@@ -74,13 +74,13 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-elapsed_left, elapsed_right = [], []
+# elapsed_left, elapsed_right = [], []
 def left_encoder_callback(channel):
     global left_count, last_left_time
     current_time = monotonic()
     elapsed = current_time - last_left_time
-    elapsed_left.append(elapsed)
-    print(f'Left Mean: {sum(elapsed_left)/len(elapsed_left):.3f}, Num: {len(elapsed_left)}')
+    # elapsed_left.append(elapsed)
+    # print(f'Left Mean: {sum(elapsed_left)/len(elapsed_left):.3f}, Num: {len(elapsed_left)}')
     if elapsed > DEBOUNCE_TIME:
         left_count += 1
         last_left_time = current_time
@@ -91,8 +91,8 @@ def right_encoder_callback(channel):
     global right_count, last_right_time
     current_time = monotonic()
     elapsed = current_time - last_right_time
-    elapsed_right.append(elapsed)
-    print(f'Left Mean: {sum(elapsed_right)/len(elapsed_right):.3f}, Num: {len(elapsed_right)}')
+    # elapsed_right.append(elapsed)
+    # print(f'Left Mean: {sum(elapsed_right)/len(elapsed_right):.3f}, Num: {len(elapsed_right)}')
     if elapsed > DEBOUNCE_TIME:
         right_count += 1
         last_right_time = current_time
