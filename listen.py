@@ -214,8 +214,8 @@ def pid_control():
     
     while running:
         
-        print('left mean', np.percentile(left_arr, 20))
-        print('right mean', np.percentile(right_arr, 20))
+        print(len(left_arr), ' left mean', np.percentile(left_arr, 50))
+        print(len(right_arr), ' right mean', np.percentile(right_arr, 50))
         
         current_time = monotonic()
         dt = current_time - last_time
