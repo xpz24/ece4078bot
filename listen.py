@@ -34,9 +34,7 @@ MAX_CORRECTION = 30  # Maximum PWM correction value
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
-prev_left_time, prev_right_time = 0, 0
 prev_left_state, prev_right_state = None, None
-DEBOUNCE_TIME = 0.00005
 use_ramping = True
 RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
 MIN_RAMP_THRESHOLD = 15  # Only ramp if change is greater than this
@@ -73,43 +71,29 @@ def setup_gpio():
     right_motor_pwm.start(0)
 
 def left_encoder_callback(channel):
-    global left_count, prev_left_state, prev_left_time
-    
-    current_time = monotonic()
+    global left_count, prev_left_state
     current_state = GPIO.input(LEFT_ENCODER)
-    elapsed = current_time - prev_left_time
     
-    if (prev_left_state is not None and 
-        current_state != prev_left_state and  # Real state change. Without this, false positive happens due to electrical noise
-        elapsed > DEBOUNCE_TIME):  # Not too fast
-        
+    # Real state change. Without this, false positive happens due to electrical noise
+    # After testing, debouncing not needed
+    if (prev_left_state is not None and current_state != prev_left_state        
         left_count += 1
         prev_left_state = current_state
-        prev_left_time = current_time
     
     elif prev_left_state is None:
         # First reading
         prev_left_state = current_state
-        prev_left_time = current_time
 
 def right_encoder_callback(channel):
     global right_count, prev_right_state, prev_right_time
-    
-    current_time = monotonic()
     current_state = GPIO.input(RIGHT_ENCODER)
-    elapsed = current_time - prev_left_time
     
-    if (prev_right_state is not None and 
-        current_state != prev_right_state and
-        elapsed > DEBOUNCE_TIME):
-        
+    if (prev_right_state is not None and current_state != prev_right_state: 
         right_count += 1
         prev_right_state = current_state
-        prev_right_time = current_time
         
     elif prev_right_state is None:
         prev_right_state = current_state
-        prev_right_time = current_time
     
 def reset_encoder():
     global left_count, right_count
