@@ -2,6 +2,7 @@ import socket
 import struct
 import io
 import threading
+import time
 from time import monotonic
 import RPi.GPIO as GPIO
 import numpy as np
