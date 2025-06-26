@@ -78,7 +78,7 @@ def setup_gpio():
 
 left_min, right_min = 999, 999
 def left_encoder_callback(channel):
-    global left_count, prev_left_state, last_left_time
+    global left_count, prev_left_state, last_left_time, left_min
     
     current_time = monotonic()
     current_state = GPIO.input(LEFT_ENCODER)
@@ -101,7 +101,7 @@ def left_encoder_callback(channel):
         last_left_time = current_time
 
 def right_encoder_callback(channel):
-    global right_count, prev_right_state, last_right_time
+    global right_count, prev_right_state, last_right_time, right_min
     
     current_time = monotonic()
     current_state = GPIO.input(RIGHT_ENCODER)
