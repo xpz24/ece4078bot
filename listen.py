@@ -74,29 +74,61 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-# elapsed_left, elapsed_right = [], []
+
 def left_encoder_callback(channel):
-    global left_count, last_left_time
-    current_time = monotonic()
-    elapsed = current_time - last_left_time
-    # elapsed_left.append(elapsed)
-    # print(f'Left Mean: {sum(elapsed_left)/len(elapsed_left):.3f}, Num: {len(elapsed_left)}')
-    if elapsed > DEBOUNCE_TIME:
-        left_count += 1
-        last_left_time = current_time
-        print('left', elapsed)
+    global left_count, prev_left_state, last_left_time
     
+    current_time = monotonic()
+    current_state = GPIO.input(LEFT_ENCODER)
+    
+    if (prev_left_state is not None and 
+        current_state != prev_left_state and  # Real state change
+        current_time - last_left_time > DEBOUNCE_TIME):  # Not too fast
+        
+        left_count += 1
+        prev_left_state = current_state
+        last_left_time = current_time
+    
+    elif prev_left_state is None:
+        # First reading
+        prev_left_state = current_state
+        last_left_time = current_time
 
 def right_encoder_callback(channel):
-    global right_count, last_right_time
+    global right_count, prev_right_state, last_right_time
+    
     current_time = monotonic()
-    elapsed = current_time - last_right_time
-    # elapsed_right.append(elapsed)
-    # print(f'Left Mean: {sum(elapsed_right)/len(elapsed_right):.3f}, Num: {len(elapsed_right)}')
-    if elapsed > DEBOUNCE_TIME:
+    current_state = GPIO.input(RIGHT_ENCODER)
+    
+    if (prev_right_state is not None and 
+        current_state != prev_right_state and
+        current_time - last_right_time > DEBOUNCE_TIME):
+        
         right_count += 1
+        prev_right_state = current_state
         last_right_time = current_time
-        print('right', elapsed)
+    elif prev_right_state is None:
+        prev_right_state = current_state
+        last_right_time = current_time
+
+# def left_encoder_callback(channel):
+    # global left_count, last_left_time
+    # current_time = monotonic()
+    # elapsed = current_time - last_left_time
+    # if elapsed > DEBOUNCE_TIME:
+        # left_count += 1
+        # last_left_time = current_time
+        # print('left', elapsed)
+    
+
+# def right_encoder_callback(channel):
+    # global right_count, last_right_time
+    # current_time = monotonic()
+    # elapsed = current_time - last_right_time
+    # if elapsed > DEBOUNCE_TIME:
+        # right_count += 1
+        # last_right_time = current_time
+        # print('right', elapsed)
     
     
 def reset_encoder():
@@ -106,21 +138,21 @@ def reset_encoder():
 def set_motors(left, right):
     global prev_movement, current_movement
     # Pre-Start Kick (Motor Priming)
-    # if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
-        # print('Pre-starting..')
-        # if current_movement  == 'forward':
-            # GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-            # GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-            # GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-            # GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-        # elif current_movement == 'backward':
-            # GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
-            # GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-            # GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
-            # GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        # left_motor_pwm.ChangeDutyCycle(100)
-        # right_motor_pwm.ChangeDutyCycle(100)
-        # time.sleep(0.05)
+    if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
+        print('Pre-starting..')
+        if current_movement  == 'forward':
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        elif current_movement == 'backward':
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        time.sleep(0.05)
 
     # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
@@ -151,7 +183,6 @@ def set_motors(left, right):
     
     
 def apply_min_threshold(pwm_value, min_threshold):
-    """Apply minimum PWM threshold to ensure motors can respond reliably"""
     if pwm_value == 0:
         return 0  # Zero means stop
     elif abs(pwm_value) < min_threshold:
@@ -289,10 +320,8 @@ def pid_control():
         
         # Apply the ramped PWM values
         set_motors(final_left_pwm, final_right_pwm)
-        # if current_left_pwm != 0:
-            # print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
-        
-
+        if current_left_pwm != 0:
+            print(f"({current_left_pwm:.3f},{current_right_pwm:.3f}), ({left_count}, {right_count})")
         
         time.sleep(0.01)
 
