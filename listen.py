@@ -2,7 +2,7 @@ import socket
 import struct
 import io
 import threading
-import time
+from time import monotonic
 import RPi.GPIO as GPIO
 import numpy as np
 from picamera2 import Picamera2
@@ -75,7 +75,7 @@ def setup_gpio():
 
 def left_encoder_callback(channel):
     global left_count, last_left_time
-    current_time = time.time()
+    current_time = monotonic()
     elapsed = current_time - last_left_time
     if elapsed > DEBOUNCE_TIME:
         left_count += 1
@@ -85,7 +85,7 @@ def left_encoder_callback(channel):
 
 def right_encoder_callback(channel):
     global right_count, last_right_time
-    current_time = time.time()
+    current_time = monotonic()
     elapsed = current_time - last_right_time
     if elapsed > DEBOUNCE_TIME:
         right_count += 1
@@ -160,7 +160,7 @@ def pid_control():
     
     integral = 0
     last_error = 0
-    last_time = time.time()
+    last_time = monotonic()
     
     # Ramping variables & params
     current_left_pwm = 0
@@ -170,7 +170,7 @@ def pid_control():
     
     while running:
     
-        current_time = time.time()
+        current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
         
