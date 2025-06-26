@@ -208,8 +208,6 @@ def pid_control():
     previous_right_target = 0
     
     while running:
-        if GPIO.input(LEFT_ENCODER) or GPIO.input(RIGHT_ENCODER):
-            print('hi')
     
         current_time = monotonic()
         dt = current_time - last_time
