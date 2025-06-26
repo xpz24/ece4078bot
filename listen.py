@@ -109,7 +109,7 @@ def right_encoder_callback(channel):
     
     if (prev_right_state is not None and 
         current_state != prev_right_state and
-        elapsed = current_time - last_left_time > DEBOUNCE_TIME):
+        elapsed > DEBOUNCE_TIME):
         
         right_count += 1
         prev_right_state = current_state
