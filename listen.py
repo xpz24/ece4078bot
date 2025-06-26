@@ -43,6 +43,8 @@ prev_movement = 'stop'
 
 last_left_time = 0
 last_right_time = 0
+prev_left_state = None
+prev_right_state = None
 DEBOUNCE_TIME = 0.0
 
 def setup_gpio():
