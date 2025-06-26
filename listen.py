@@ -34,18 +34,14 @@ MAX_CORRECTION = 30  # Maximum PWM correction value
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
+prev_left_time, prev_right_time = 0, 0
+prev_left_state, prev_right_state = None, None
+DEBOUNCE_TIME = 0.0005
 use_ramping = True
 RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
 MIN_RAMP_THRESHOLD = 15  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 15
-current_movement = 'stop'
-prev_movement = 'stop'
-
-last_left_time = 0
-last_right_time = 0
-prev_left_state = None
-prev_right_state = None
-DEBOUNCE_TIME = 0
+current_movement, prev_movement = 'stop', 'stop'
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -76,34 +72,32 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-left_arr, right_arr = [0.1], [0.1]
 def left_encoder_callback(channel):
-    global left_count, prev_left_state, last_left_time, left_arr
+    global left_count, prev_left_state, prev_left_time
     
     current_time = monotonic()
     current_state = GPIO.input(LEFT_ENCODER)
-    elapsed = current_time - last_left_time
+    elapsed = current_time - prev_left_time
     
     if (prev_left_state is not None and 
-        current_state != prev_left_state and  # Real state change
+        current_state != prev_left_state and  # Real state change. Without this, false positive happens due to electrical noise
         elapsed > DEBOUNCE_TIME):  # Not too fast
         
         left_count += 1
         prev_left_state = current_state
-        last_left_time = current_time
-        left_arr.append(elapsed)
+        prev_left_time = current_time
     
     elif prev_left_state is None:
         # First reading
         prev_left_state = current_state
-        last_left_time = current_time
+        prev_left_time = current_time
 
 def right_encoder_callback(channel):
-    global right_count, prev_right_state, last_right_time, right_arr
+    global right_count, prev_right_state, prev_right_time
     
     current_time = monotonic()
     current_state = GPIO.input(RIGHT_ENCODER)
-    elapsed = current_time - last_left_time
+    elapsed = current_time - prev_left_time
     
     if (prev_right_state is not None and 
         current_state != prev_right_state and
@@ -111,32 +105,11 @@ def right_encoder_callback(channel):
         
         right_count += 1
         prev_right_state = current_state
-        last_right_time = current_time
-        right_arr.append(elapsed)
+        prev_right_time = current_time
         
     elif prev_right_state is None:
         prev_right_state = current_state
-        last_right_time = current_time
-
-# def left_encoder_callback(channel):
-    # global left_count, last_left_time
-    # current_time = monotonic()
-    # elapsed = current_time - last_left_time
-    # if elapsed > DEBOUNCE_TIME:
-        # left_count += 1
-        # last_left_time = current_time
-        # print('left', elapsed)
-    
-
-# def right_encoder_callback(channel):
-    # global right_count, last_right_time
-    # current_time = monotonic()
-    # elapsed = current_time - last_right_time
-    # if elapsed > DEBOUNCE_TIME:
-        # right_count += 1
-        # last_right_time = current_time
-        # print('right', elapsed)
-    
+        prev_right_time = current_time
     
 def reset_encoder():
     global left_count, right_count
@@ -144,7 +117,7 @@ def reset_encoder():
 
 def set_motors(left, right):
     global prev_movement, current_movement
-    # Pre-Start Kick (Motor Priming)
+    # Pre-Start Kick (Motor Priming), to reduce initial jerk and slight orientation change
     if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
         print('Pre-starting..')
         if current_movement  == 'forward':
@@ -200,7 +173,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement, left_arr, right_arr
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement
     
     integral = 0
     last_error = 0
@@ -213,10 +186,7 @@ def pid_control():
     previous_right_target = 0
     
     while running:
-        
-        print(len(left_arr), ' left mean', np.percentile(left_arr, 25), np.percentile(left_arr, 1))
-        print(len(right_arr), ' right mean', np.percentile(right_arr, 25), np.percentile(right_arr, 1))
-        
+                
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
@@ -228,7 +198,6 @@ def pid_control():
         else: current_movement = 'turn'
         
         if not use_PID:
-            # set_motors(left_pwm, right_pwm)
             target_left = left_pwm
             target_right = right_pwm
         else:
@@ -242,23 +211,18 @@ def pid_control():
                 derivative = KD * (error - last_error) / dt if dt > 0 else 0
                 correction = proportional + integral + derivative
                 correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
-                            
-                if (left_pwm < 0 and right_pwm < 0): correction = -correction
-                actual_left = left_pwm - correction
-                actual_right = right_pwm + correction
-                    
-                # set_motors(actual_left, actual_right)
-                target_left = left_pwm - correction
-                target_right = right_pwm + correction
-                
                 last_error = error
-                
+                            
+                if (left_pwm < 0 and right_pwm < 0):
+                    correction = -correction
+
+                target_left = left_pwm - correction
+                target_right = right_pwm + correction               
             else:
                 # Reset integral when stopped or turning
                 integral = 0
                 last_error = 0
                 reset_encoder()
-                # set_motors(left_pwm, right_pwm)
                 target_left = left_pwm
                 target_right = right_pwm
         
@@ -287,8 +251,6 @@ def pid_control():
             # Synchronized ramping - both motors ramp together or not at all
             if not left_direction_change and not right_direction_change:
                 if left_needs_ramp or right_needs_ramp:
-                    print('Ramping...')
-                    # At least one motor needs ramping - ramp both simultaneously
                     
                     # Left motor ramping (including ramp-down to zero)
                     if abs(left_diff) <= max_change_per_cycle:
