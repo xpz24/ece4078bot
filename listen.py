@@ -5,9 +5,7 @@ import threading
 import time
 from time import monotonic
 import RPi.GPIO as GPIO
-import numpy as np
 from picamera2 import Picamera2
-from simple_pid import PID
 
 # Network Configuration
 HOST = '0.0.0.0'
@@ -74,7 +72,7 @@ def left_encoder_callback(channel):
     global left_count, prev_left_state
     current_state = GPIO.input(LEFT_ENCODER)
     
-    # Real state change. Without this, false positive happens due to electrical noise
+    # Check for actual state change. Without this, false positive happens due to electrical noise
     # After testing, debouncing not needed
     if (prev_left_state is not None and current_state != prev_left_state):       
         left_count += 1
@@ -101,9 +99,9 @@ def reset_encoder():
 
 def set_motors(left, right):
     global prev_movement, current_movement
+    
     # Pre-Start Kick (Motor Priming), to reduce initial jerk and slight orientation change
     if prev_movement == 'stop' and current_movement in ['forward', 'backward']:
-        print('Pre-starting..')
         if current_movement  == 'forward':
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -118,7 +116,6 @@ def set_motors(left, right):
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
 
-    # when pwm is 0, implement Active Braking, better than putting duty cycle to 0 which may cause uneven stopping
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -128,6 +125,7 @@ def set_motors(left, right):
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
         right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
     else:
+        # when pwm = 0, implement Active Braking mode, better than putting duty cycle to 0 which may cause uneven stopping
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
         right_motor_pwm.ChangeDutyCycle(100)
@@ -164,13 +162,12 @@ def pid_control():
     last_time = monotonic()
     
     # Ramping variables & params
-    current_left_pwm = 0
-    current_right_pwm = 0
+    ramp_left_pwm = 0
+    ramp_right_pwm = 0
     previous_left_target = 0
     previous_right_target = 0
     
-    while running:
-                
+    while running:          
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
@@ -182,13 +179,12 @@ def pid_control():
         else: current_movement = 'turn'
         
         if not use_PID:
-            target_left = left_pwm
-            target_right = right_pwm
+            target_left_pwm = left_pwm
+            target_right_pwm = right_pwm
         else:
             if current_movement == 'forward' or current_movement == 'backward':
-                ### Calculate error (difference between encoder counts)
-                error = left_count - right_count
                 
+                error = left_count - right_count
                 proportional = KP * error
                 integral += KI * error * dt
                 integral = max(-MAX_CORRECTION, min(integral, MAX_CORRECTION))  # Anti-windup
@@ -197,40 +193,40 @@ def pid_control():
                 correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
                 last_error = error
                             
-                if (left_pwm < 0 and right_pwm < 0):
+                if current_movement == 'backward':
                     correction = -correction
 
-                target_left = left_pwm - correction
-                target_right = right_pwm + correction               
+                target_left_pwm = left_pwm - correction
+                target_right_pwm = right_pwm + correction               
             else:
-                # Reset integral when stopped or turning
+                # Reset when stopped or turning
                 integral = 0
                 last_error = 0
                 reset_encoder()
-                target_left = left_pwm
-                target_right = right_pwm
+                target_left_pwm = left_pwm
+                target_right_pwm = right_pwm
         
         if use_ramping and use_PID:
             # PWM Ramping Logic
             max_change_per_cycle = RAMP_RATE * dt
             
             # Calculate differences for both motors
-            left_diff = target_left - current_left_pwm
-            right_diff = target_right - current_right_pwm
+            left_diff = target_left_pwm - ramp_left_pwm
+            right_diff = target_right_pwm - ramp_right_pwm
             
             # Determine if either motor needs ramping
             left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
             right_needs_ramp = abs(right_diff) > MIN_RAMP_THRESHOLD
             
             # Check for direction change conditions (but not stops)
-            left_direction_change = (target_left * previous_left_target < 0) and target_left != 0 and previous_left_target != 0
-            right_direction_change = (target_right * previous_right_target < 0) and target_right != 0 and previous_right_target != 0
+            left_direction_change = (target_left_pwm * previous_left_target < 0) and target_left_pwm != 0 and previous_left_target != 0
+            right_direction_change = (target_right_pwm * previous_right_target < 0) and target_right_pwm != 0 and previous_right_target != 0
             
             # Apply immediate changes for direction changes only (for safety)
             if left_direction_change:
-                current_left_pwm = target_left
+                ramp_left_pwm = target_left_pwm
             if right_direction_change:
-                current_right_pwm = target_right
+                ramp_right_pwm = target_right_pwm
             
             # Synchronized ramping - both motors ramp together or not at all
             if not left_direction_change and not right_direction_change:
@@ -238,44 +234,43 @@ def pid_control():
                     
                     # Left motor ramping (including ramp-down to zero)
                     if abs(left_diff) <= max_change_per_cycle:
-                        current_left_pwm = target_left  # Close enough, set to target
+                        ramp_left_pwm = target_left_pwm  # Close enough, set to target
                     else:
                         # Ramp towards target (up or down)
                         if left_diff > 0:
-                            current_left_pwm += max_change_per_cycle
+                            ramp_left_pwm += max_change_per_cycle
                         else:
-                            current_left_pwm -= max_change_per_cycle
+                            ramp_left_pwm -= max_change_per_cycle
                     
                     # Right motor ramping (including ramp-down to zero)
                     if abs(right_diff) <= max_change_per_cycle:
-                        current_right_pwm = target_right  # Close enough, set to target
+                        ramp_right_pwm = target_right_pwm  # Close enough, set to target
                     else:
                         # Ramp towards target (up or down)
                         if right_diff > 0:
-                            current_right_pwm += max_change_per_cycle
+                            ramp_right_pwm += max_change_per_cycle
                         else:
-                            current_right_pwm -= max_change_per_cycle
+                            ramp_right_pwm -= max_change_per_cycle
                 else:
                     # Neither motor needs ramping - apply targets directly
-                    current_left_pwm = target_left
-                    current_right_pwm = target_right
+                    ramp_left_pwm = target_left_pwm
+                    ramp_right_pwm = target_right_pwm
             
             # Store previous targets for next iteration
-            previous_left_target = target_left
-            previous_right_target = target_right
+            previous_left_target = target_left_pwm
+            previous_right_target = target_right_pwm
         
         else:
             # Ramping disabled - apply target values directly
-            current_left_pwm = target_left
-            current_right_pwm = target_right
+            ramp_left_pwm = target_left_pwm
+            ramp_right_pwm = target_right_pwm
             
-        final_left_pwm = apply_min_threshold(current_left_pwm, MIN_PWM_THRESHOLD)
-        final_right_pwm = apply_min_threshold(current_right_pwm, MIN_PWM_THRESHOLD)
-        
-        # Apply the ramped PWM values
+        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
+        final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
         set_motors(final_left_pwm, final_right_pwm)
-        if current_left_pwm != 0:
-            print(f"(Left PWM, Right PWM)=({current_left_pwm:.2f},{current_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
+        
+        if ramp_left_pwm != 0: # print for debugging purpose
+            print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
         
         time.sleep(0.01)
 
@@ -292,7 +287,6 @@ def camera_stream_server():
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, CAMERA_PORT))
     server_socket.listen(1)
-    
     print(f"Camera stream server started on port {CAMERA_PORT}")
     
     while running:
@@ -327,7 +321,7 @@ def camera_stream_server():
     server_socket.close()
     picam2.stop()
 
-# PID configuration server
+
 def pid_config_server():
     global use_PID, KP, KI, KD
     
@@ -336,7 +330,6 @@ def pid_config_server():
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PID_CONFIG_PORT))
     server_socket.listen(1)
-    
     print(f"PID config server started on port {PID_CONFIG_PORT}")
     
     while running:
@@ -383,7 +376,6 @@ def wheel_server():
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, WHEEL_PORT))
     server_socket.listen(1)
-    
     print(f"Wheel server started on port {WHEEL_PORT}")
     
     while running:
