@@ -4,8 +4,9 @@ import io
 import threading
 import time
 from time import monotonic
-import RPi.GPIO as GPIO
-from picamera2 import Picamera2
+from turtle import left
+import RPi.GPIO as GPIO # type: ignore
+from picamera2 import Picamera2 # type: ignore
 
 # Network Configuration
 HOST = '0.0.0.0'
@@ -26,18 +27,24 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD = 0, 0, 0
-MAX_CORRECTION = 30  # Maximum PWM correction value
+MAX_CORRECTION = 40  # Maximum PWM correction value
+MAX_INTEGRAL = 25
 
 # Global variables
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
+left_v, right_v = 0.0, 0.0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
-RAMP_RATE = 250  # PWM units per second (adjust this value to tune ramp speed)
+RAMP_RATE = 15  # PWM units per second (adjust this value to tune ramp speed)
 MIN_RAMP_THRESHOLD = 15  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 15
 current_movement, prev_movement = 'stop', 'stop'
+
+def clamp(x: int, minimum: int, maximum: int):
+    X = max(minimum, min(x, maximum))
+    return X
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -155,11 +162,16 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement, left_v, right_v
     
-    integral = 0
-    last_error = 0
+    integral_rotation = 0.0
+    integral_linear = 0.0
+    last_error_rotation = 0.0
+    last_error_linear = 0.0
     last_time = monotonic()
+    last_derivative_linear = 0.0
+    last_derivative_rotation = 0.0
+    alpha = 0.7
     
     # Ramping variables & params
     ramp_left_pwm = 0
@@ -176,32 +188,48 @@ def pid_control():
         if (left_pwm > 0 and right_pwm > 0): current_movement = 'forward'
         elif (left_pwm < 0 and right_pwm < 0): current_movement = 'backward'
         elif (left_pwm == 0 and right_pwm == 0): current_movement = 'stop'
-        else: current_movement = 'turn'
+        elif (left_pwm < 0 and right_pwm > 0): current_movement = 'rotate_left'
+        else: current_movement = 'rotate_right'
         
         if not use_PID:
             target_left_pwm = left_pwm
             target_right_pwm = right_pwm
         else:
-            if current_movement == 'forward' or current_movement == 'backward':
+            if current_movement in ['forward', 'backward', 'rotate_left', 'rotate_right']:
                 
-                error = left_count - right_count
+                if current_movement in ['forward','backward']:
+                    error = left_v - right_v
+                    derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
+                    # derivative = alpha * last_derivative_linear + (1-alpha)*derivative
+                    # last_derivative_linear = derivative
+                    integral_linear += KI * error * dt
+                    integral_linear = clamp(integral_linear, -MAX_INTEGRAL, MAX_INTEGRAL)
+                    last_error_linear = error
+                    I = integral_linear
+                else:
+                    error = left_v + right_v
+                    derivative = KD * (error - last_error_rotation) / dt if dt > 0 else 0
+                    # derivative = alpha * last_derivative_rotation + (1-alpha)*derivative
+                    # last_derivative_rotation = derivative
+                    integral_rotation += KI * error * dt
+                    integral_rotation = clamp(integral_rotation, -MAX_INTEGRAL, MAX_INTEGRAL)
+                    last_error_rotation = error
+                    I = integral_rotation
+
                 proportional = KP * error
-                integral += KI * error * dt
-                integral = max(-MAX_CORRECTION, min(integral, MAX_CORRECTION))  # Anti-windup
-                derivative = KD * (error - last_error) / dt if dt > 0 else 0
-                correction = proportional + integral + derivative
-                correction = max(-MAX_CORRECTION, min(correction, MAX_CORRECTION))
-                last_error = error
+                correction = clamp(proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION)
                             
-                if current_movement == 'backward':
+                if current_movement in ['backward', 'rotate_right']:
                     correction = -correction
 
                 target_left_pwm = left_pwm - correction
                 target_right_pwm = right_pwm + correction               
             else:
-                # Reset when stopped or turning
-                integral = 0
-                last_error = 0
+                # Reset when stopped
+                # integral_linear = 0
+                # integral_rotation = 0
+                last_error_linear = 0
+                last_error_rotation = 0
                 reset_encoder()
                 target_left_pwm = left_pwm
                 target_right_pwm = right_pwm
@@ -269,8 +297,8 @@ def pid_control():
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
         set_motors(final_left_pwm, final_right_pwm)
         
-        if ramp_left_pwm != 0: # print for debugging purpose
-            print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
+        # if ramp_left_pwm != 0: # print for debugging purpose
+        #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
         
         time.sleep(0.01)
 
@@ -370,7 +398,7 @@ def pid_config_server():
     
 
 def wheel_server():
-    global left_pwm, right_pwm, running, left_count, right_count
+    global left_pwm, right_pwm, running, left_count, right_count, left_v, right_v
     
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -392,7 +420,7 @@ def wheel_server():
                         break
                     
                     # Unpack speed values and convert to PWM
-                    left_speed, right_speed = struct.unpack("!ff", data)
+                    left_speed, right_speed, left_v, right_v = struct.unpack("!ffff", data)
                     # print(f"Received wheel: left_speed={left_speed:.4f}, right_speed={right_speed:.4f}")
                     left_pwm, right_pwm = left_speed*100, right_speed*100
                     
