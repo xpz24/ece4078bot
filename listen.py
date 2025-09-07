@@ -4,7 +4,6 @@ import io
 import threading
 import time
 from time import monotonic
-from turtle import left
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
 
@@ -27,8 +26,8 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD = 0, 0, 0
-MAX_CORRECTION = 40  # Maximum PWM correction value
-MAX_INTEGRAL = 25
+MAX_CORRECTION = 70  # Maximum PWM correction value
+MAX_INTEGRAL = 40
 
 # Global variables
 running = True
@@ -37,9 +36,9 @@ left_count, right_count = 0, 0
 left_v, right_v = 0.0, 0.0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
-RAMP_RATE = 15  # PWM units per second (adjust this value to tune ramp speed)
-MIN_RAMP_THRESHOLD = 15  # Only ramp if change is greater than this
-MIN_PWM_THRESHOLD = 15
+RAMP_RATE = 180  # PWM units per second (adjust this value to tune ramp speed)
+MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
+MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
 
 
