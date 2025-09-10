@@ -215,7 +215,7 @@ def pid_control():
 
                 if current_movement in ["forward", "backward"]:
                     error = left_v - right_v
-                    print(f"linear! leftV {left_v}, rightV{right_v}")
+                    # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
                     # derivative = alpha * last_derivative_linear + (1-alpha)*derivative
                     # last_derivative_linear = derivative
@@ -231,7 +231,7 @@ def pid_control():
                     )
                 else:
                     error = left_v + right_v
-                    print(f"Rotation! leftV {left_v}, rightV{right_v}")
+                    # print(f"Rotation! leftV {left_v}, rightV{right_v}")
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
@@ -263,7 +263,7 @@ def pid_control():
                 reset_encoder()
                 target_left_pwm = left_pwm
                 target_right_pwm = right_pwm
-                print(f"Stopped! leftV {left_v}, rightV{right_v}")
+                # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         if use_ramping and use_PID:
             # PWM Ramping Logic
