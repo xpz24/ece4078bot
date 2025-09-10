@@ -25,7 +25,7 @@ RIGHT_ENCODER = 16
 
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
-KP, Ki, KD = 0, 0, 0
+KP, Ki, KD , rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
 MAX_CORRECTION = 70  # Maximum PWM correction value
 MAX_INTEGRAL = 40
 
@@ -168,7 +168,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, prev_movement, current_movement, left_v, right_v
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, left_v, right_v
 
     integral_rotation = 0.0
     integral_linear = 0.0
@@ -225,25 +225,29 @@ def pid_control():
                     )
                     last_error_linear = error
                     I = integral_linear
+                    proportional = KP * error
+                    correction = clamp(
+                        proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
+                    )
                 else:
                     error = left_v + right_v
                     print(f"Rotation! leftV {left_v}, rightV{right_v}")
                     derivative = (
-                        KD * (error - last_error_rotation) / dt if dt > 0 else 0
+                        rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
                     # derivative = alpha * last_derivative_rotation + (1-alpha)*derivative
                     # last_derivative_rotation = derivative
-                    integral_rotation += KI * error * dt
+                    integral_rotation += rKI * error * dt
                     integral_rotation = clamp(
                         integral_rotation, -MAX_INTEGRAL, MAX_INTEGRAL
                     )
                     last_error_rotation = error
                     I = integral_rotation
 
-                proportional = KP * error
-                correction = clamp(
-                    proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
-                )
+                    proportional = rKP * error
+                    correction = clamp(
+                        proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
+                    )
 
                 if current_movement in ["backward", "rotate_right"]:
                     correction = -correction
@@ -386,7 +390,7 @@ def camera_stream_server():
 
 
 def pid_config_server():
-    global use_PID, KP, KI, KD
+    global use_PID, KP, KI, KD, rKP, rKI, rKD
 
     # Create socket for receiving PID configuration
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -402,11 +406,11 @@ def pid_config_server():
 
             try:
                 # Receive PID constants (4 floats)
-                data = client_socket.recv(16)
-                if data and len(data) == 16:
-                    use_PID, KP, KI, KD = struct.unpack("!ffff", data)
+                data = client_socket.recv(28)
+                if data and len(data) == 28:
+                    use_PID, KP, KI, KD, rKP, rKI, rKD = struct.unpack("!fffffff", data)
                     if use_PID:
-                        print(f"Updated PID constants: KP={KP}, KI={KI}, KD={KD}")
+                        print(f"Updated PID constants: KP={KP}, KI={KI}, KD={KD}, rKP={rKP}, rKI={rKI}, rKD = {rKD}")
                     else:
                         print("The robot is not using PID.")
 
