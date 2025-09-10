@@ -26,8 +26,8 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD , rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
-MAX_CORRECTION = 70  # Maximum PWM correction value
-MAX_INTEGRAL = 40
+MAX_CORRECTION = 30  # Maximum PWM correction value
+MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
 running = True
