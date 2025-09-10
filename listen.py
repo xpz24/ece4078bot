@@ -249,8 +249,8 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
-                if current_movement in ["backward", "rotate_right"]:
-                    correction = -correction
+                # if current_movement in ["backward", "rotate_right"]:
+                #     correction = -correction
 
                 target_left_pwm = left_pwm - correction
                 target_right_pwm = right_pwm + correction
