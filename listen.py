@@ -348,7 +348,12 @@ def camera_stream_server():
     camera_config = picam2.create_preview_configuration(lores={"size": (640, 480)})
     picam2.configure(camera_config)
     picam2.start()
+    # Enable lens shading correction; ONLY EDIT FATIMA MADE
+    picam2.set_controls({"LensShadingEnable": True})
 
+    # Set AWB to auto (or try tungsten/fluorescent depending on your lights)
+    picam2.set_controls({"AwbMode": "auto"})
+# END OF EDITSSS_______________________________---
     # Create socket for streaming
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
