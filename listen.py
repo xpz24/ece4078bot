@@ -33,11 +33,12 @@ MAX_INTEGRAL = MAX_CORRECTION
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
-left_v, right_v = 0.0, 0.0
+left_w, right_w = 0.0, 0.0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 140  # PWM units per second (adjust this value to tune ramp speed)
 RAMP_RATE_DEC = 200
+RIGHT_WHEEL_OFFSET = 1.05  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
@@ -169,7 +170,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 def pid_control():
     # Only applies for forward/backward, not turning
-    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, left_v, right_v
+    global left_pwm, right_pwm, left_count, right_count, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, left_w, right_w
 
     integral_rotation_left = 0.0  # Double check if it resets here
     integral_rotation_right = 0.0  # Double check if it resets here
@@ -217,7 +218,7 @@ def pid_control():
             ]:
 
                 if current_movement in ["forward", "backward"]:
-                    error = left_v - right_v
+                    error = left_w - right_w
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
                     derivative = (
@@ -246,7 +247,7 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
-                    error = left_v + right_v
+                    error = left_w + right_w
                     # print(f"Rotation! leftV {left_v}, rightV{right_v}")
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
@@ -301,6 +302,11 @@ def pid_control():
             # Calculate differences for both motors
             left_diff = target_left_pwm - ramp_left_pwm
             right_diff = target_right_pwm - ramp_right_pwm
+
+            if current_movement in ["rotate_left", "rotate_right"]:
+                target_right_pwm = -target_right_pwm
+                ramp_right_pwm = -ramp_right_pwm
+                right_diff = target_right_pwm - ramp_right_pwm
 
             # Determine if either motor needs ramping
             left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
@@ -473,7 +479,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, left_count, right_count, left_v, right_v
+    global left_pwm, right_pwm, running, left_count, right_count, left_w, right_w
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -495,11 +501,14 @@ def wheel_server():
                         break
 
                     # Unpack speed values and convert to PWM
-                    left_speed, right_speed, left_v, right_v = struct.unpack(
+                    left_speed, right_speed, left_w, right_w = struct.unpack(
                         "!ffff", data
                     )
                     # print(f"Received wheel: left_speed={left_speed:.4f}, right_speed={right_speed:.4f}")
-                    left_pwm, right_pwm = left_speed * 100, right_speed * 100
+                    left_pwm, right_pwm = (
+                        left_speed * 100,
+                        right_speed * 100 * RIGHT_WHEEL_OFFSET,
+                    )
 
                     # Send encoder counts back
                     response = struct.pack("!ii", left_count, right_count)
