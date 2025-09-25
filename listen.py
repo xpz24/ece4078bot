@@ -186,8 +186,6 @@ def pid_control():
     # Ramping variables & params
     ramp_left_pwm = 0
     ramp_right_pwm = 0
-    previous_left_target = 0
-    previous_right_target = 0
 
     while running:
         current_time = monotonic()
@@ -278,11 +276,15 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
-                # if current_movement in ["backward", "rotate_right"]:
-                #     correction = -correction
-
-                target_left_pwm = left_pwm - correction / 2
-                target_right_pwm = right_pwm + correction / 2
+                if current_movement in ["forward", "backward"]:
+                    target_left_pwm = left_pwm - correction
+                    target_right_pwm = right_pwm + correction
+                elif current_movement == "rotate_left":
+                    target_left_pwm = left_pwm - correction
+                    target_right_pwm = right_pwm - correction
+                elif current_movement == "rotate_right":
+                    target_left_pwm = left_pwm + correction
+                    target_right_pwm = right_pwm + correction
             else:
                 # Reset when stopped
                 # integral_linear = 0
