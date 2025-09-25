@@ -26,7 +26,7 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD, rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
-MAX_CORRECTION = 45  # Maximum PWM correction value
+MAX_CORRECTION = 70  # Maximum PWM correction value
 MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
@@ -298,38 +298,60 @@ def pid_control():
             max_a = RAMP_RATE_ACC * dt  # accel step per cycle
             max_d = RAMP_RATE_DEC * dt  # decel step per cycle
 
-            def ramp_one(current, target):
-                # No change needed
-                if abs(target - current) <= MIN_RAMP_THRESHOLD:
-                    return target
+            def move_toward(curr, tgt, step):
+                delta = tgt - curr
+                if abs(delta) <= step:
+                    return tgt
+                return curr + (step if delta > 0 else -step)
 
-                # If reversing direction (non-zero to opposite sign), first brake to 0
-                if current != 0 and target != 0 and (current * target < 0):
-                    step = max_d
-                    delta_to_zero = -current
-                    return current + max(-step, min(step, delta_to_zero))
+            # Rotation-aware synchronized ramping
+            if current_movement in ["rotate_left", "rotate_right"]:
+                # Use a shared spin magnitude so both wheels ramp together
+                # Signs come from PID targets
+                signL = 1 if target_left_pwm >= 0 else -1
+                signR = 1 if target_right_pwm >= 0 else -1
 
-                # If target is zero, decelerate toward 0
-                if target == 0:
-                    step = max_d
-                    delta_to_zero = -current
-                    return current + max(-step, min(step, delta_to_zero))
+                curr_mag = max(abs(ramp_left_pwm), abs(ramp_right_pwm))
+                tgt_mag  = max(abs(target_left_pwm), abs(target_right_pwm))
 
-                # Same sign (or starting from 0): choose accel vs decel by magnitude
-                accelerating = abs(target) > abs(current)
-                step = max_a if accelerating else max_d
+                # If either wheel needs a sign flip (changing rotate direction), brake to 0 first
+                sign_flip = (
+                    (ramp_left_pwm != 0 and target_left_pwm != 0 and (ramp_left_pwm * target_left_pwm < 0)) or
+                    (ramp_right_pwm != 0 and target_right_pwm != 0 and (ramp_right_pwm * target_right_pwm < 0))
+                )
 
-                delta = target - current
-                return current + max(-step, min(step, delta))
+                desired_mag = 0.0 if sign_flip else tgt_mag
+                step = max_a if desired_mag > curr_mag else max_d
+                next_mag = move_toward(curr_mag, desired_mag, step)
 
-            # Apply per wheel independently (sign-aware, motion-agnostic)
-            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm)
-            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
+                # Do not exceed per-wheel PID targets
+                ramp_left_pwm  = signL * min(next_mag, abs(target_left_pwm))
+                ramp_right_pwm = signR * min(next_mag, abs(target_right_pwm))
+
+            else:
+                # Linear / stop: per-wheel ramp (sign-agnostic)
+                def ramp_one(current, target):
+                    # Direction change (non-zero to opposite sign): brake to 0 first
+                    if current != 0 and target != 0 and (current * target < 0):
+                        return move_toward(current, 0.0, max_d)
+
+                    # Moving toward zero target => decel
+                    if target == 0:
+                        return move_toward(current, 0.0, max_d)
+
+                    # Same sign or starting from zero: accel vs decel by magnitude
+                    accelerating = (abs(target) > abs(current))
+                    step = max_a if accelerating else max_d
+                    return move_toward(current, target, step)
+
+                ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
+                ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
 
             # Remember for next iteration
             previous_left_target = target_left_pwm
             previous_right_target = target_right_pwm
         else:
+            # Ramping disabled - apply target values directly
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
