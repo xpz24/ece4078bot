@@ -298,42 +298,31 @@ def pid_control():
             max_a = RAMP_RATE_ACC * dt
             max_d = RAMP_RATE_DEC * dt
 
-            def ramp_one(current, target, force_accel=False):
-                # If stopping → decelerate toward 0
+            def ramp_one(current, target):
+                # Case 1: stopping (target = 0)
                 if target == 0:
                     step = max_d
                     return current + max(-step, min(step, -current))
 
-                # If reversing direction → brake to 0 first
+                # Case 2: reversing direction (sign change)
                 if current != 0 and (current * target < 0):
                     step = max_d
                     return current + max(-step, min(step, -current))
 
-                # Otherwise: either rotation (force_accel=True) or linear motion
-                if force_accel:
-                    step = max_a
+                # Case 3: same direction → accel/decel by magnitude
+                if abs(target) > abs(current):
+                    step = max_a   # accelerating (0 → ±target, or smaller → larger magnitude)
                 else:
-                    accelerating = abs(target) > abs(current)
-                    step = max_a if accelerating else max_d
+                    step = max_d   # decelerating (slowing down toward target magnitude)
 
                 delta = target - current
                 return current + max(-step, min(step, delta))
 
-            if current_movement in ["rotate_left", "rotate_right"]:
-                # Rotation → always accel toward target
-                ramp_left_pwm = ramp_one(
-                    ramp_left_pwm, target_left_pwm, force_accel=True
-                )
-                ramp_right_pwm = ramp_one(
-                    ramp_right_pwm, target_right_pwm, force_accel=True
-                )
-            else:
-                # Forward/back → accel/decel depending on |target|
-                ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm)
-                ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
+            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm)
+            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
 
-            previous_left_target = target_left_pwm
-            previous_right_target = target_right_pwm
+            # previous_left_target = target_left_pwm
+            # previous_right_target = target_right_pwm
         else:
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
