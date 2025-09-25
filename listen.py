@@ -295,37 +295,33 @@ def pid_control():
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         if use_ramping and use_PID:
-            max_a = RAMP_RATE_ACC * dt
-            max_d = RAMP_RATE_DEC * dt
+            max_a = RAMP_RATE_ACC * dt  # > 0
+            max_d = RAMP_RATE_DEC * dt  # > 0
 
-            def ramp_one(current, target):
-                # Case 1: stopping (target = 0)
-                if target == 0:
-                    step = max_d
-                    return current + max(-step, min(step, -current))
+            def move_toward(curr, tgt, step):
+                delta = tgt - curr
+                if abs(delta) <= step:
+                    return tgt
+                return curr + (step if delta > 0 else -step)
 
-                # Case 2: reversing direction (sign change)
-                if current != 0 and (current * target < 0):
-                    step = max_d
-                    return current + max(-step, min(step, -current))
+            def ramp_one(curr, tgt):
+                # 1) If direction changes, decelerate to 0 first (your only decel case besides stop)
+                if curr != 0 and tgt != 0 and (curr * tgt < 0):
+                    return move_toward(curr, 0.0, max_d)
 
-                # Case 3: same direction → accel/decel by magnitude
-                if abs(target) > abs(current):
-                    step = max_a   # accelerating (0 → ±target, or smaller → larger magnitude)
-                else:
-                    step = max_d   # decelerating (slowing down toward target magnitude)
+                # 2) If stopping, decelerate to 0
+                if tgt == 0:
+                    return move_toward(curr, 0.0, max_d)
 
-                delta = target - current
-                return current + max(-step, min(step, delta))
+                # 3) Otherwise, always accelerate toward target (signed)
+                return move_toward(curr, tgt, max_a)
 
-            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm)
+            ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
             ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
-
-            # previous_left_target = target_left_pwm
-            # previous_right_target = target_right_pwm
         else:
-            ramp_left_pwm = target_left_pwm
+            ramp_left_pwm  = target_left_pwm
             ramp_right_pwm = target_right_pwm
+
 
         final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
