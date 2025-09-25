@@ -295,8 +295,8 @@ def pid_control():
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         if use_ramping and use_PID:
-            max_a = RAMP_RATE_ACC * dt  # > 0
-            max_d = RAMP_RATE_DEC * dt  # > 0
+            max_a = RAMP_RATE_ACC * dt   # > 0
+            max_d = RAMP_RATE_DEC * dt   # > 0
 
             def move_toward(curr, tgt, step):
                 delta = tgt - curr
@@ -305,15 +305,19 @@ def pid_control():
                 return curr + (step if delta > 0 else -step)
 
             def ramp_one(curr, tgt):
-                # 1) If direction changes, decelerate to 0 first (your only decel case besides stop)
+                # A) direction change → brake to 0 first (the only decel besides stop)
                 if curr != 0 and tgt != 0 and (curr * tgt < 0):
                     return move_toward(curr, 0.0, max_d)
 
-                # 2) If stopping, decelerate to 0
+                # B) stopping → decelerate toward 0
                 if tgt == 0:
                     return move_toward(curr, 0.0, max_d)
 
-                # 3) Otherwise, always accelerate toward target (signed)
+                # C) otherwise: ALWAYS accelerate toward the signed target
+                #    If close enough, snap to target (avoid tiny dithers)
+                if abs(tgt - curr) <= MIN_RAMP_THRESHOLD:
+                    return tgt
+
                 return move_toward(curr, tgt, max_a)
 
             ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
@@ -322,11 +326,9 @@ def pid_control():
             ramp_left_pwm  = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-
-        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
+        final_left_pwm  = apply_min_threshold(ramp_left_pwm,  MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
         set_motors(final_left_pwm, final_right_pwm)
-
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
