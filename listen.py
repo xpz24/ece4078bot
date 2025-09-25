@@ -294,37 +294,37 @@ def pid_control():
                 target_right_pwm = right_pwm
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
-        if use_ramping and use_PID:
-            max_a = RAMP_RATE_ACC * dt   # > 0
-            max_d = RAMP_RATE_DEC * dt   # > 0
+# (Optional for debugging symmetry: disable offset first)
+# target_right_pwm *= RIGHT_WHEEL_OFFSET
 
-            def move_toward(curr, tgt, step):
-                delta = tgt - curr
-                if abs(delta) <= step:
-                    return tgt
-                return curr + (step if delta > 0 else -step)
+    if use_ramping and use_PID:
+        # ensure dt>0 to avoid zero step
+        max_a = max(1e-9, RAMP_RATE_ACC * dt)  # accel step (>0)
+        max_d = max(1e-9, RAMP_RATE_DEC * dt)  # decel step (>0)
 
-            def ramp_one(curr, tgt):
-                # A) direction change → brake to 0 first (the only decel besides stop)
-                if curr != 0 and tgt != 0 and (curr * tgt < 0):
-                    return move_toward(curr, 0.0, max_d)
+        def signed_step(curr, tgt, step):
+            delta = tgt - curr  # delta is SIGNED
+            if delta > step:   return curr + step
+            if delta < -step:  return curr - step
+            return tgt
 
-                # B) stopping → decelerate toward 0
-                if tgt == 0:
-                    return move_toward(curr, 0.0, max_d)
+        def ramp_one(curr, tgt):
+            # Stop: decelerate to 0 (signed)
+            if tgt == 0.0:
+                return signed_step(curr, 0.0, max_d)
 
-                # C) otherwise: ALWAYS accelerate toward the signed target
-                #    If close enough, snap to target (avoid tiny dithers)
-                if abs(tgt - curr) <= MIN_RAMP_THRESHOLD:
-                    return tgt
+            # Sign change: brake to 0 first (only decel case besides stop)
+            if curr != 0.0 and (curr * tgt < 0.0):
+                return signed_step(curr, 0.0, max_d)
 
-                return move_toward(curr, tgt, max_a)
+            # Same sign or starting from 0: ALWAYS accelerate toward signed target
+            return signed_step(curr, tgt, max_a)
 
-            ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
-            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
-        else:
-            ramp_left_pwm  = target_left_pwm
-            ramp_right_pwm = target_right_pwm
+        ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
+        ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
+    else:
+        ramp_left_pwm  = target_left_pwm
+        ramp_right_pwm = target_right_pwm
 
         final_left_pwm  = apply_min_threshold(ramp_left_pwm,  MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
