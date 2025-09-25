@@ -295,76 +295,55 @@ def pid_control():
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         if use_ramping and use_PID:
-            # PWM Ramping Logic
-            max_change_per_cycle_a = RAMP_RATE_ACC * dt
-            max_change_per_cycle_d = RAMP_RATE_DEC * dt
+            # PWM Ramping Logic (sign-aware, motion-agnostic)
+            max_change_per_cycle_a = RAMP_RATE_ACC * dt  # accel step size
+            max_change_per_cycle_d = RAMP_RATE_DEC * dt  # decel step size
 
-            # Calculate differences for both motors
+            # Differences to target for both motors
             left_diff = target_left_pwm - ramp_left_pwm
             right_diff = target_right_pwm - ramp_right_pwm
 
-            if current_movement in ["rotate_left", "rotate_right"]:
-                target_right_pwm = -target_right_pwm
-                ramp_right_pwm = -ramp_right_pwm
-                right_diff = target_right_pwm - ramp_right_pwm
-
-            # Determine if either motor needs ramping
+            # Do we need to ramp?
             left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
             right_needs_ramp = abs(right_diff) > MIN_RAMP_THRESHOLD
 
-            # Check for direction change conditions (but not stops)
+            # Detect direction flips (non-zero to opposite sign)
             left_direction_change = (
+                target_left_pwm != 0 and previous_left_target != 0 and
                 (target_left_pwm * previous_left_target < 0)
-                and target_left_pwm != 0
-                and previous_left_target != 0
             )
             right_direction_change = (
+                target_right_pwm != 0 and previous_right_target != 0 and
                 (target_right_pwm * previous_right_target < 0)
-                and target_right_pwm != 0
-                and previous_right_target != 0
             )
 
-            # Apply immediate changes for direction changes only (for safety)
+            # For safety, if direction flips, snap to target (avoid lingering near 0)
             if left_direction_change:
                 ramp_left_pwm = target_left_pwm
+                left_diff = 0.0  # no further ramp this cycle
             if right_direction_change:
                 ramp_right_pwm = target_right_pwm
+                right_diff = 0.0
 
-            # Synchronized ramping - both motors ramp together or not at all
-            if not left_direction_change and not right_direction_change:
-                if left_needs_ramp or right_needs_ramp:
-                    # Ramp towards target (up or down)
-                    if left_diff > 0:
-                        if abs(left_diff) <= max_change_per_cycle_a:
-                            ramp_left_pwm = target_left_pwm
-                        else:
-                            ramp_left_pwm += max_change_per_cycle_a
-                    else:
-                        if abs(left_diff) <= max_change_per_cycle_d:
-                            ramp_left_pwm = target_left_pwm
-                        else:
-                            ramp_left_pwm -= max_change_per_cycle_d
-
-                    # Ramp towards target (up or down)
-                    if right_diff > 0:
-                        if abs(right_diff) <= max_change_per_cycle_a:
-                            ramp_right_pwm = target_right_pwm
-                        else:
-                            ramp_right_pwm += max_change_per_cycle_a
-                    else:
-                        if abs(right_diff) <= max_change_per_cycle_d:
-                            ramp_right_pwm = target_right_pwm
-                        else:
-                            ramp_right_pwm -= max_change_per_cycle_d
+            # Smooth ramp (no sign-flip this cycle)
+            if not left_direction_change:
+                if left_needs_ramp:
+                    step = max_change_per_cycle_a if left_diff > 0 else max_change_per_cycle_d
+                    # Move toward target by at most 'step'
+                    ramp_left_pwm += max(-step, min(step, left_diff))
                 else:
-                    # Neither motor needs ramping - apply targets directly
                     ramp_left_pwm = target_left_pwm
+
+            if not right_direction_change:
+                if right_needs_ramp:
+                    step = max_change_per_cycle_a if right_diff > 0 else max_change_per_cycle_d
+                    ramp_right_pwm += max(-step, min(step, right_diff))
+                else:
                     ramp_right_pwm = target_right_pwm
 
-            # Store previous targets for next iteration
+            # Remember for next iteration
             previous_left_target = target_left_pwm
             previous_right_target = target_right_pwm
-
         else:
             # Ramping disabled - apply target values directly
             ramp_left_pwm = target_left_pwm
