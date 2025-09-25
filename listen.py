@@ -295,57 +295,41 @@ def pid_control():
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         if use_ramping and use_PID:
-            # PWM Ramping Logic (sign-aware, motion-agnostic)
-            max_change_per_cycle_a = RAMP_RATE_ACC * dt  # accel step size
-            max_change_per_cycle_d = RAMP_RATE_DEC * dt  # decel step size
+            max_a = RAMP_RATE_ACC * dt  # accel step per cycle
+            max_d = RAMP_RATE_DEC * dt  # decel step per cycle
 
-            # Differences to target for both motors
-            left_diff = target_left_pwm - ramp_left_pwm
-            right_diff = target_right_pwm - ramp_right_pwm
+            def ramp_one(current, target):
+                # No change needed
+                if abs(target - current) <= MIN_RAMP_THRESHOLD:
+                    return target
 
-            # Do we need to ramp?
-            left_needs_ramp = abs(left_diff) > MIN_RAMP_THRESHOLD
-            right_needs_ramp = abs(right_diff) > MIN_RAMP_THRESHOLD
+                # If reversing direction (non-zero to opposite sign), first brake to 0
+                if current != 0 and target != 0 and (current * target < 0):
+                    step = max_d
+                    delta_to_zero = -current
+                    return current + max(-step, min(step, delta_to_zero))
 
-            # Detect direction flips (non-zero to opposite sign)
-            left_direction_change = (
-                target_left_pwm != 0 and previous_left_target != 0 and
-                (target_left_pwm * previous_left_target < 0)
-            )
-            right_direction_change = (
-                target_right_pwm != 0 and previous_right_target != 0 and
-                (target_right_pwm * previous_right_target < 0)
-            )
+                # If target is zero, decelerate toward 0
+                if target == 0:
+                    step = max_d
+                    delta_to_zero = -current
+                    return current + max(-step, min(step, delta_to_zero))
 
-            # For safety, if direction flips, snap to target (avoid lingering near 0)
-            if left_direction_change:
-                ramp_left_pwm = target_left_pwm
-                left_diff = 0.0  # no further ramp this cycle
-            if right_direction_change:
-                ramp_right_pwm = target_right_pwm
-                right_diff = 0.0
+                # Same sign (or starting from 0): choose accel vs decel by magnitude
+                accelerating = abs(target) > abs(current)
+                step = max_a if accelerating else max_d
 
-            # Smooth ramp (no sign-flip this cycle)
-            if not left_direction_change:
-                if left_needs_ramp:
-                    step = max_change_per_cycle_a if left_diff > 0 else max_change_per_cycle_d
-                    # Move toward target by at most 'step'
-                    ramp_left_pwm += max(-step, min(step, left_diff))
-                else:
-                    ramp_left_pwm = target_left_pwm
+                delta = target - current
+                return current + max(-step, min(step, delta))
 
-            if not right_direction_change:
-                if right_needs_ramp:
-                    step = max_change_per_cycle_a if right_diff > 0 else max_change_per_cycle_d
-                    ramp_right_pwm += max(-step, min(step, right_diff))
-                else:
-                    ramp_right_pwm = target_right_pwm
+            # Apply per wheel independently (sign-aware, motion-agnostic)
+            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm)
+            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
 
             # Remember for next iteration
             previous_left_target = target_left_pwm
             previous_right_target = target_right_pwm
         else:
-            # Ramping disabled - apply target values directly
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
