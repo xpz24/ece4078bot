@@ -26,7 +26,7 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD, rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
-MAX_CORRECTION = 70  # Maximum PWM correction value
+MAX_CORRECTION = 40  # Maximum PWM correction value
 MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
@@ -38,7 +38,7 @@ prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 140  # PWM units per second (adjust this value to tune ramp speed)
 RAMP_RATE_DEC = 200
-RIGHT_WHEEL_OFFSET = 1.05  # 5% boost for weaker wheel
+RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
@@ -182,6 +182,7 @@ def pid_control():
     last_derivative_linear = 0.0
     last_derivative_rotation = 0.0
     alpha = 0.7
+    switch_mode = [False, False]  # [left, right]
 
     # Ramping variables & params
     ramp_left_pwm = 0
@@ -194,15 +195,21 @@ def pid_control():
 
         prev_movement = current_movement
         if left_pwm > 0 and right_pwm > 0:
-            current_movement = "forward"
+            requested_movement = "forward"
         elif left_pwm < 0 and right_pwm < 0:
-            current_movement = "backward"
+            requested_movement = "backward"
         elif left_pwm == 0 and right_pwm == 0:
-            current_movement = "stop"
+            requested_movement = "stop"
         elif left_pwm < 0 and right_pwm > 0:
-            current_movement = "rotate_left"
+            requested_movement = "rotate_left"
         else:
-            current_movement = "rotate_right"
+            requested_movement = "rotate_right"
+
+        # Only switch once both ramps have finished braking/accelerating
+        if not any(switch_mode):  # means [False, False]
+            current_movement = requested_movement
+        else:
+            current_movement = prev_movement
 
         if not use_PID:
             target_left_pwm = left_pwm
@@ -293,8 +300,8 @@ def pid_control():
                 target_right_pwm = right_pwm
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
-    # (Optional for debugging symmetry: disable offset first)
-    # target_right_pwm *= RIGHT_WHEEL_OFFSET
+        # (Optional for debugging symmetry: disable offset first)
+        # target_right_pwm *= RIGHT_WHEEL_OFFSET
 
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
@@ -303,29 +310,34 @@ def pid_control():
 
             def signed_step(curr, tgt, step):
                 delta = tgt - curr  # delta is SIGNED
-                if delta > step:   return curr + step
-                if delta < -step:  return curr - step
+                if delta > step:
+                    return curr + step
+                if delta < -step:
+                    return curr - step
                 return tgt
 
-            def ramp_one(curr, tgt):
+            def ramp_one(curr, tgt, switch_mode_list, index):
                 # Stop: decelerate to 0 (signed)
                 if tgt == 0.0:
+                    switch_mode_list[index] = True
                     return signed_step(curr, 0.0, max_d)
 
                 # Sign change: brake to 0 first (only decel case besides stop)
                 if curr != 0.0 and (curr * tgt < 0.0):
+                    switch_mode_list[index] = True
                     return signed_step(curr, 0.0, max_d)
 
                 # Same sign or starting from 0: ALWAYS accelerate toward signed target
+                switch_mode_list[index] = False
                 return signed_step(curr, tgt, max_a)
 
-            ramp_left_pwm  = ramp_one(ramp_left_pwm,  target_left_pwm)
-            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm)
+            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
+            ramp_right_pwm = ramp_one(ramp_right_pwm, target_right_pwm, switch_mode, 1)
         else:
-            ramp_left_pwm  = target_left_pwm
+            ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        final_left_pwm  = apply_min_threshold(ramp_left_pwm,  MIN_PWM_THRESHOLD)
+        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
         set_motors(final_left_pwm, final_right_pwm)
         # if ramp_left_pwm != 0: # print for debugging purpose
