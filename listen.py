@@ -279,12 +279,9 @@ def pid_control():
                 if current_movement in ["forward", "backward"]:
                     target_left_pwm = left_pwm - correction
                     target_right_pwm = right_pwm + correction
-                elif current_movement == "rotate_left":
+                elif current_movement in ["rotate_left", "rotate_right"]:
                     target_left_pwm = left_pwm - correction
                     target_right_pwm = right_pwm - correction
-                elif current_movement == "rotate_right":
-                    target_left_pwm = left_pwm + correction
-                    target_right_pwm = right_pwm + correction
             else:
                 # Reset when stopped
                 # integral_linear = 0
