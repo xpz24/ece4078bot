@@ -36,8 +36,8 @@ left_count, right_count = 0, 0
 left_w, right_w = 0.0, 0.0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
-RAMP_RATE_ACC = 140  # PWM units per second (adjust this value to tune ramp speed)
-RAMP_RATE_DEC = 200
+RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
+RAMP_RATE_DEC = 180
 RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
@@ -310,10 +310,8 @@ def pid_control():
 
             def signed_step(curr, tgt, step):
                 delta = tgt - curr  # delta is SIGNED
-                if delta > step:
-                    return curr + step
-                if delta < -step:
-                    return curr - step
+                if abs(delta) > step:
+                    return curr + (delta / abs(delta)) * step
                 return tgt
 
             def ramp_one(curr, tgt, switch_mode_list, index):
