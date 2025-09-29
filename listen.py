@@ -317,7 +317,7 @@ def pid_control():
             def ramp_one(curr, tgt, switch_mode_list, index):
                 # Stop: decelerate to 0 (signed)
                 if tgt == 0.0:
-                    switch_mode_list[index] = True
+                    switch_mode_list[index] = True if curr != 0.0 else False
                     return signed_step(curr, 0.0, max_d)
 
                 # Sign change: brake to 0 first (only decel case besides stop)
