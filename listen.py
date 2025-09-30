@@ -26,7 +26,7 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD, rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
-MAX_CORRECTION = 40  # Maximum PWM correction value
+MAX_CORRECTION = 80  # Maximum PWM correction value
 MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
@@ -341,6 +341,7 @@ def pid_control():
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
+        print(f"left_count={left_count}, right_count={right_count}, diff={left_count-right_count}")
         time.sleep(0.01)
 
 
