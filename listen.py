@@ -341,7 +341,9 @@ def pid_control():
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
-        print(f"left_count={left_count}, right_count={right_count}, diff={left_count-right_count}")
+        print(
+            f"left_count={left_count}, right_count={right_count}, diff={left_count-right_count}, correction={correction if use_PID else 0}"
+        )
         time.sleep(0.01)
 
 
