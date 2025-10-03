@@ -61,49 +61,60 @@ pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
 
-# ------- config -------
-MIN_PWM_ROT = 14  # just above deadband where wheels reliably move
-T_ENV = 0.20  # envelope period (s) → try 0.15–0.25
+# ---- config ----
+C_ROT = round(0.2 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
+T_ENV = 0.18  # 0.12–0.22s feels good
+BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
 
-# ------- state (define once at module scope) -------
+# ---- persistent state (module-scope) ----
 _env_phase_end = None
 _env_on = False
 
 
-def _envelope_rotate(req_L, req_R, is_rotation, now):
-    """Time-envelope tiny rotation commands.
-    Returns (L_out, R_out, used_env)"""
+def rotate_envelope(L_req, R_req, is_rotation, now):
+    """
+    Always envelope in rotation:
+      - if |req| <= C_ROT: duty = |req|/C_ROT, pulse ±C_ROT then 0/brake.
+      - if |req| >  C_ROT: either bypass or output continuous (duty=1).
+    Returns (L_out, R_out, used_env)
+    """
     global _env_on, _env_phase_end
-
     if not is_rotation:
-        return req_L, req_R, False
+        return L_req, R_req, False
 
-    req_mag = max(abs(req_L), abs(req_R))
-    # only envelope if below the deadband threshold
-    if req_mag >= MIN_PWM_ROT:
-        return req_L, req_R, False
+    # Requested magnitude from ramped outputs
+    P_req = max(abs(L_req), abs(R_req))
 
-    # duty = requested / MIN_PWM_ROT (clamped 0..1)
-    duty = clamp(req_mag / float(MIN_PWM_ROT), 0.0, 1.0)
+    # Region B: above carrier
+    if P_req > C_ROT:
+        if BYPASS_ABOVE_CARRIER:
+            # continuous (no envelope)
+            return L_req, R_req, False
+
+    # Region A: micro-turns — envelope with duty < 1
+    if C_ROT <= 1e-1:
+        return 0.0, 0.0, True  # safety
+
+    duty = clamp(P_req / float(C_ROT), 0.0, 1.0)
     on_time = duty * T_ENV
     off_time = max(1e-3, T_ENV - on_time)
 
-    # init phase timer
+    # Init phase timer
     if _env_phase_end is None:
-        _env_on = duty > 0  # start ON if we want any torque
+        _env_on = duty > 0
         _env_phase_end = now + (on_time if _env_on else off_time)
 
-    # phase switching
+    # Phase switch
     if now >= _env_phase_end:
         _env_on = not _env_on
         _env_phase_end = now + (on_time if _env_on else off_time)
 
-    if _env_on and duty > 0:
-        sL = 1 if req_L >= 0 else -1
-        sR = 1 if req_R >= 0 else -1
-        return sL * MIN_PWM_ROT, sR * MIN_PWM_ROT, True
+    if _env_on and duty > 0.0:
+        sL = 1 if L_req >= 0 else -1
+        sR = 1 if R_req >= 0 else -1
+        return sL * C_ROT, sR * C_ROT, True
     else:
-        # OFF phase: zero (or brake if available)
+        # OFF phase: zero or active brake
         return 0.0, 0.0, True
 
 
@@ -424,15 +435,13 @@ def pid_control():
         is_rotation = current_movement in ("rotate_left", "rotate_right")
 
         # ramp_left_pwm / ramp_right_pwm are your existing ramp outputs
-        env_L, env_R, used_env = _envelope_rotate(
+        env_L, env_R, used_env = rotate_envelope(
             ramp_left_pwm, ramp_right_pwm, is_rotation, now
         )
 
         if used_env:
             final_left_pwm = env_L
             final_right_pwm = env_R
-            # if you have an explicit brake command and USE_ACTIVE_BRAKE is True,
-            # you can call it when env outputs (0,0) to kill inertia harder.
         else:
             final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
             final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
