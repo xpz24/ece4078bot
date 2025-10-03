@@ -136,7 +136,6 @@ def set_motors(left, right):
     with movement_lock:
         p_movement = prev_movement
         c_movement = current_movement
-    print("Set motors released movement lock")
 
     # Pre-Start Kick (Motor Priming), to reduce initial jerk and slight orientation change
     if p_movement == "stop" and c_movement in ["forward", "backward"]:
@@ -198,8 +197,8 @@ def pid_control():
     with pwm_lock:
         l_pwm = left_pwm
         r_pwm = right_pwm
-    
-    print("PID released lock")
+
+    # print("PID released lock")
 
     integral_rotation_left = 0.0
     integral_rotation_right = 0.0
@@ -255,7 +254,7 @@ def pid_control():
                 if current_movement in ["forward", "backward"]:
                     with encoder_lock:
                         error = omegaL_f - omegaR_f
-                    print("PID released encoder lock")
+                    # print("PID released encoder lock")
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
                     derivative = (
@@ -512,12 +511,10 @@ def wheel_server():
                             left_speed * 100,
                             right_speed * 100 * RIGHT_WHEEL_OFFSET,
                         )
-                    print("Wheel server released PWM Lock")
 
                     # Send vL_f, vR_f, V, W back
                     with encoder_lock:
                         response = struct.pack("!ffff", vL_f, vR_f, V, W)
-                    print("Wheel server released encoder Lock")
                     client_socket.sendall(response)
                     time.sleep(0.001)
 
@@ -548,19 +545,19 @@ def measure_velocities():
         with pwm_lock:
             sL = left_pwm / abs(left_pwm) if left_pwm != 0 else 0
             sR = right_pwm / abs(right_pwm) if right_pwm != 0 else 0
-        print("Velocity released PWM lock")
+        # print("Velocity released PWM lock")
 
         with encoder_lock:
             L = left_count
             R = right_count
-        print("Velocity released encoder lock")
+        # print("Velocity released encoder lock")
 
         now = time.monotonic()
         if last_L is None or last_R is None or last_time is None:
             last_L = L
             last_R = R
             last_time = now
-            return
+            continue
 
         dt = now - last_time
         last_time = now
@@ -614,8 +611,7 @@ def measure_velocities():
             omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
-        print("Velocity released encoder lock 2")
-        
+        # print("Velocity released encoder lock 2")
 
         time.sleep(0.005)
 
