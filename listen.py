@@ -255,7 +255,7 @@ def pid_control():
             ]:
                 with encoder_lock:
                     error = left_count - right_count
-                    print(error)
+                    # print(error)
 
                 if c_movement in ["forward", "backward"]:
                     # with encoder_lock:
@@ -545,6 +545,8 @@ def measure_velocities():
     time2stop = 0.3
     last_tick_L = 0
     last_tick_R = 0
+    last_omegaL = 0.0
+    last_omegaR = 0.0
     last_time = time.monotonic()
 
     while running:
@@ -577,20 +579,24 @@ def measure_velocities():
         if dL != 0:
             omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
             last_tick_L = now
+            last_omegaL = omegaL
         else:
             t_since = now - last_tick_L
             if t_since < time2stop:
-                omegaL = sL * 2 * math.pi / (ticks_per_rev * t_since)
+                omegaL = last_omegaL
+                # omegaL = sL * 2 * math.pi / (ticks_per_rev * t_since)
             else:
                 omegaL = 0.0
 
         if dR != 0:
             omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
             last_tick_R = now
+            last_omegaR = omegaR
         else:
             t_since = now - last_tick_R
             if t_since < time2stop:
-                omegaR = sR * 2 * math.pi / (ticks_per_rev * t_since)
+                omegaR = last_omegaR
+                # omegaR = sR * 2 * math.pi / (ticks_per_rev * t_since)
             else:
                 omegaR = 0.0
 
