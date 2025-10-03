@@ -197,6 +197,8 @@ def pid_control():
     with pwm_lock:
         l_pwm = left_pwm
         r_pwm = right_pwm
+    
+    print(f'l_pwm: {l_pwm}, r_pwm: {r_pwm}')
 
     # print("PID released lock")
 
@@ -331,7 +333,7 @@ def pid_control():
                 reset_encoder()
                 target_left_pwm = l_pwm
                 target_right_pwm = r_pwm
-                print(f'targeting stop: L={l_pwm}, R={r_pwm}')
+                # print(f'targeting stop: L={l_pwm}, R={r_pwm}')
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
         # (Optional for debugging symmetry: disable offset first)
@@ -372,7 +374,7 @@ def pid_control():
         final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
         set_motors(final_left_pwm, final_right_pwm)
-        print(f"Set motors: L={final_left_pwm:.2f}, R={final_right_pwm:.2f}")
+        # print(f"Set motors: L={final_left_pwm:.2f}, R={final_right_pwm:.2f}")
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
