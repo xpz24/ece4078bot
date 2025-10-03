@@ -258,6 +258,7 @@ def pid_control():
                 if c_movement in ["forward", "backward"]:
                     with encoder_lock:
                         error = omegaL_f - omegaR_f
+                    print(f"error: {error}, left_v: {vL_f}, right_v: {vR_f}")
                     # print("PID released encoder lock")
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
@@ -542,10 +543,10 @@ def measure_velocities():
 
     ticks_per_rev = 20
     r = 0.033
-    alpha = 0.1  # tau = T/alpha -> 0.005/0.1 = 50ms
-    max_omega = 2  # Big jump protection
+    alpha = 1  # tau = T/alpha -> 0.005/0.1 = 50ms
+    max_omega = 50  # Big jump protection
     baseline = 0.115
-    time2stop = 0.5
+    time2stop = 0.3
     last_tick_L = 0
     last_tick_R = 0
     last_time = time.monotonic()
@@ -623,7 +624,9 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
         # print("Velocity released encoder lock 2")
-        print(f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, V={V:.4f}, W={W:.4f}")
+        print(
+            f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, V={V:.4f}, W={W:.4f}"
+        )
 
         time.sleep(0.005)
 
