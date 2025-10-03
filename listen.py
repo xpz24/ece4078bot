@@ -542,11 +542,11 @@ def measure_velocities():
     alpha = 0.3  # tau = T/alpha -> 0.005/0.1 = 50ms
     max_omega = 100  # Big jump protection
     baseline = 0.115
-    time2stop = 0.3
-    last_tick_L = 0
-    last_tick_R = 0
-    last_omegaL = 0.0
-    last_omegaR = 0.0
+    # time2stop = 0.3
+    # last_tick_L = 0
+    # last_tick_R = 0
+    # last_omegaL = 0.0
+    # last_omegaR = 0.0
     last_time = time.monotonic()
 
     while running:
@@ -576,30 +576,32 @@ def measure_velocities():
         last_L = L
         last_R = R
 
-        if dL != 0:
-            omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
-            last_tick_L = now
-            last_omegaL = omegaL
-        else:
-            t_since = now - last_tick_L
-            if t_since < time2stop:
-                omegaL = last_omegaL
-                # omegaL = sL * 2 * math.pi / (ticks_per_rev * t_since)
-            else:
-                omegaL = 0.0
+        # if dL != 0:
+            # omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
+            # last_tick_L = now
+            # last_omegaL = omegaL
+        # else:
+        #     t_since = now - last_tick_L
+        #     if t_since < time2stop:
+        #         omegaL = last_omegaL
+        #         # omegaL = sL * 2 * math.pi / (ticks_per_rev * t_since)
+        #     else:
+        #         omegaL = 0.0
 
-        if dR != 0:
-            omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
-            last_tick_R = now
-            last_omegaR = omegaR
-        else:
-            t_since = now - last_tick_R
-            if t_since < time2stop:
-                omegaR = last_omegaR
-                # omegaR = sR * 2 * math.pi / (ticks_per_rev * t_since)
-            else:
-                omegaR = 0.0
+        # if dR != 0:
+        #     omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
+        #     last_tick_R = now
+        #     last_omegaR = omegaR
+        # else:
+        #     t_since = now - last_tick_R
+        #     if t_since < time2stop:
+        #         omegaR = last_omegaR
+        #         # omegaR = sR * 2 * math.pi / (ticks_per_rev * t_since)
+        #     else:
+        #         omegaR = 0.0
 
+        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
+        omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
         # This is ok since big jump can only occur for one cycle
         if abs(omegaL) > max_omega:
             omegaL = 0.0
@@ -626,11 +628,11 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
         # print("Velocity released encoder lock 2")
-        # print(
-        #     f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
-        # )
+        print(
+            f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
+        )
 
-        time.sleep(0.005)
+        time.sleep(0.1)
 
 
 def main():
