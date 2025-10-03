@@ -204,8 +204,6 @@ def pid_control():
     last_error_rotation = 0.0
     last_error_linear = 0.0
     last_time = monotonic()
-    last_derivative_linear = 0.0
-    last_derivative_rotation = 0.0
     switch_mode = [False, False]  # [left, right]
 
     # Ramping variables & params
@@ -220,8 +218,7 @@ def pid_control():
         dt = current_time - last_time
         last_time = current_time
 
-        with movement_lock:
-            prev_movement = current_movement
+        prev_movement = current_movement
 
         if l_pwm > 0 and r_pwm > 0:
             requested_movement = "forward"
@@ -235,19 +232,16 @@ def pid_control():
             requested_movement = "rotate_right"
 
         # Only switch once both ramps have finished braking/accelerating
-        with movement_lock:
-            if not any(switch_mode):  # means [False, False]
-                current_movement = requested_movement
-            else:
-                current_movement = prev_movement
-            c_movement = current_movement
-            p_movement = prev_movement
+        if not any(switch_mode):  # means [False, False]
+            current_movement = requested_movement
+        else:
+            current_movement = prev_movement
 
         if not use_PID:
             target_left_pwm = l_pwm
             target_right_pwm = r_pwm
         else:
-            if c_movement in [
+            if current_movement in [
                 "forward",
                 "backward",
                 "rotate_left",
@@ -257,14 +251,15 @@ def pid_control():
                     error = left_count - right_count
                     # print(error)
 
-                if c_movement in ["forward", "backward"]:
+                if current_movement in ["forward", "backward"]:
+                    last_error_rotation = 0
                     # with encoder_lock:
                     #     error = omegaL_f - omegaR_f
                     # print(f"error: {error}, left_v: {omegaL_f}, right_v: {omegaR_f}")
                     # print("PID released encoder lock")
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
-                    if c_movement == "forward":
+                    if current_movement == "forward":
                         integral_linear_forward += KI * error * dt
                         integral_linear_forward = clamp(
                             integral_linear_forward, -MAX_INTEGRAL, MAX_INTEGRAL
@@ -277,7 +272,7 @@ def pid_control():
 
                     I = (
                         integral_linear_forward
-                        if c_movement == "forward"
+                        if current_movement == "forward"
                         else integral_linear_back
                     )
                     last_error_linear = error
@@ -286,12 +281,13 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
+                    last_error_linear = 0
                     # error = omegaL_f + omegaR_f
                     # print(f"Rotation! leftV {left_v}, rightV{right_v}")
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
-                    if c_movement == "rotate_left":
+                    if current_movement == "rotate_left":
                         integral_rotation_left += rKI * error * dt
                         integral_rotation_left = clamp(
                             integral_rotation_left, -MAX_INTEGRAL, MAX_INTEGRAL
@@ -304,7 +300,7 @@ def pid_control():
 
                     I = (
                         integral_rotation_left
-                        if c_movement == "rotate_left"
+                        if current_movement == "rotate_left"
                         else integral_rotation_right
                     )
                     last_error_rotation = error
@@ -313,12 +309,12 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
-                if c_movement in ["backward", "rotate_left"]:
+                if current_movement in ["backward", "rotate_left"]:
                     correction = -correction
-                if c_movement in ["forward", "backward"]:
+                if current_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
-                elif c_movement in ["rotate_left", "rotate_right"]:
+                elif current_movement in ["rotate_left", "rotate_right"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm - correction
             else:
@@ -539,8 +535,8 @@ def measure_velocities():
 
     ticks_per_rev = 20
     r = 0.033
-    alpha = 0.9  # tau = T/alpha -> 0.005/0.1 = 50ms
-    max_omega = 30  # Big jump protection
+    alpha = 0.5  # tau = T/alpha -> 0.005/0.1 = 50ms
+    max_omega = 80  # Big jump protection
     baseline = 0.115
     # time2stop = 0.3
     # last_tick_L = 0
@@ -608,7 +604,7 @@ def measure_velocities():
         #     f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
         # )
 
-        time.sleep(0.04)
+        time.sleep(0.1)
 
 
 def main():
