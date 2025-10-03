@@ -623,6 +623,7 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
         # print("Velocity released encoder lock 2")
+        print(f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, V={V:.4f}, W={W:.4f}")
 
         time.sleep(0.005)
 
