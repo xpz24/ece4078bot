@@ -254,10 +254,13 @@ def pid_control():
                 "rotate_left",
                 "rotate_right",
             ]:
+                with encoder_lock:
+                    error = left_count - right_count
+                    print(error)
 
                 if c_movement in ["forward", "backward"]:
-                    with encoder_lock:
-                        error = omegaL_f - omegaR_f
+                    # with encoder_lock:
+                    #     error = omegaL_f - omegaR_f
                     # print(f"error: {error}, left_v: {omegaL_f}, right_v: {omegaR_f}")
                     # print("PID released encoder lock")
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
@@ -288,7 +291,7 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
-                    error = omegaL_f + omegaR_f
+                    # error = omegaL_f + omegaR_f
                     # print(f"Rotation! leftV {left_v}, rightV{right_v}")
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
@@ -319,6 +322,8 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
+                if c_movement in ["backward", "rotate_left"]:
+                    correction = -correction
                 if c_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
@@ -544,7 +549,7 @@ def measure_velocities():
     ticks_per_rev = 20
     r = 0.033
     alpha = 1  # tau = T/alpha -> 0.005/0.1 = 50ms
-    max_omega = 50  # Big jump protection
+    max_omega = 100  # Big jump protection
     baseline = 0.115
     time2stop = 0.3
     last_tick_L = 0
@@ -624,9 +629,9 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
         # print("Velocity released encoder lock 2")
-        print(
-            f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
-        )
+        # print(
+        #     f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
+        # )
 
         time.sleep(0.005)
 
