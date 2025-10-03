@@ -61,7 +61,53 @@ pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
 
-def clamp(x: int, minimum: int, maximum: int):
+# ------- config -------
+MIN_PWM_ROT = 14  # just above deadband where wheels reliably move
+T_ENV = 0.20  # envelope period (s) → try 0.15–0.25
+
+# ------- state (define once at module scope) -------
+_env_phase_end = None
+_env_on = False
+
+
+def _envelope_rotate(req_L, req_R, is_rotation, now):
+    """Time-envelope tiny rotation commands.
+    Returns (L_out, R_out, used_env)"""
+    global _env_on, _env_phase_end
+
+    if not is_rotation:
+        return req_L, req_R, False
+
+    req_mag = max(abs(req_L), abs(req_R))
+    # only envelope if below the deadband threshold
+    if req_mag >= MIN_PWM_ROT:
+        return req_L, req_R, False
+
+    # duty = requested / MIN_PWM_ROT (clamped 0..1)
+    duty = clamp(req_mag / float(MIN_PWM_ROT), 0.0, 1.0)
+    on_time = duty * T_ENV
+    off_time = max(1e-3, T_ENV - on_time)
+
+    # init phase timer
+    if _env_phase_end is None:
+        _env_on = duty > 0  # start ON if we want any torque
+        _env_phase_end = now + (on_time if _env_on else off_time)
+
+    # phase switching
+    if now >= _env_phase_end:
+        _env_on = not _env_on
+        _env_phase_end = now + (on_time if _env_on else off_time)
+
+    if _env_on and duty > 0:
+        sL = 1 if req_L >= 0 else -1
+        sR = 1 if req_R >= 0 else -1
+        return sL * MIN_PWM_ROT, sR * MIN_PWM_ROT, True
+    else:
+        # OFF phase: zero (or brake if available)
+        return 0.0, 0.0, True
+
+
+def clamp(x: int | float, minimum: int | float, maximum: int | float):
     X = max(minimum, min(x, maximum))
     return X
 
@@ -374,8 +420,23 @@ def pid_control():
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
-        final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
+        now = monotonic()
+        is_rotation = current_movement in ("rotate_left", "rotate_right")
+
+        # ramp_left_pwm / ramp_right_pwm are your existing ramp outputs
+        env_L, env_R, used_env = _envelope_rotate(
+            ramp_left_pwm, ramp_right_pwm, is_rotation, now
+        )
+
+        if used_env:
+            final_left_pwm = env_L
+            final_right_pwm = env_R
+            # if you have an explicit brake command and USE_ACTIVE_BRAKE is True,
+            # you can call it when env outputs (0,0) to kill inertia harder.
+        else:
+            final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
+            final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
+
         set_motors(final_left_pwm, final_right_pwm)
         # print(f"Set motors: L={final_left_pwm:.2f}, R={final_right_pwm:.2f}")
         # if ramp_left_pwm != 0: # print for debugging purpose
