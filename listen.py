@@ -205,15 +205,24 @@ def pid_control():
     last_error_linear = 0.0
     last_time = monotonic()
     switch_mode = [False, False]  # [left, right]
+    last_L_count, last_R_count = 0, 0
 
     # Ramping variables & params
     ramp_left_pwm = 0
     ramp_right_pwm = 0
 
     while running:
+        with encoder_lock:
+            l_count = left_count
+            r_count = right_count
         with pwm_lock:
             l_pwm = left_pwm
             r_pwm = right_pwm
+
+        dLc = (l_pwm / abs(l_pwm)) * (l_count - last_L_count)
+        dRc = (r_pwm / abs(r_pwm)) * (r_count - last_R_count)
+        last_L_count = l_count
+        last_R_count = r_count
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
@@ -247,17 +256,9 @@ def pid_control():
                 "rotate_left",
                 "rotate_right",
             ]:
-                with encoder_lock:
-                    error = left_count - right_count
-                    # print(error)
-
                 if current_movement in ["forward", "backward"]:
+                    error = dLc - dRc
                     last_error_rotation = 0
-                    # with encoder_lock:
-                    #     error = omegaL_f - omegaR_f
-                    # print(f"error: {error}, left_v: {omegaL_f}, right_v: {omegaR_f}")
-                    # print("PID released encoder lock")
-                    # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
                     if current_movement == "forward":
                         integral_linear_forward += KI * error * dt
@@ -282,8 +283,7 @@ def pid_control():
                     )
                 else:
                     last_error_linear = 0
-                    # error = omegaL_f + omegaR_f
-                    # print(f"Rotation! leftV {left_v}, rightV{right_v}")
+                    error = dLc + dRc
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
@@ -309,8 +309,8 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
-                if current_movement in ["backward", "rotate_left"]:
-                    correction = -correction
+                # if current_movement in ["backward", "rotate_left"]:
+                #     correction = -correction
                 if current_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
@@ -330,9 +330,6 @@ def pid_control():
                 target_right_pwm = r_pwm
                 # print(f'targeting stop: L={l_pwm}, R={r_pwm}')
                 # print(f"Stopped! leftV {left_v}, rightV{right_v}")
-
-        # (Optional for debugging symmetry: disable offset first)
-        # target_right_pwm *= RIGHT_WHEEL_OFFSET
 
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
