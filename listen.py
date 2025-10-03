@@ -194,11 +194,6 @@ def apply_min_threshold(pwm_value, min_threshold):
 def pid_control():
     # Only applies for forward/backward, not turning
     global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement
-    with pwm_lock:
-        l_pwm = left_pwm
-        r_pwm = right_pwm
-    
-    print(f'l_pwm: {l_pwm}, r_pwm: {r_pwm}')
 
     # print("PID released lock")
 
@@ -219,11 +214,15 @@ def pid_control():
     ramp_right_pwm = 0
 
     while running:
+        with pwm_lock:
+            l_pwm = left_pwm
+            r_pwm = right_pwm
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
 
-        prev_movement = current_movement
+        with movement_lock:
+            prev_movement = current_movement
 
         if l_pwm > 0 and r_pwm > 0:
             requested_movement = "forward"
@@ -237,23 +236,26 @@ def pid_control():
             requested_movement = "rotate_right"
 
         # Only switch once both ramps have finished braking/accelerating
-        if not any(switch_mode):  # means [False, False]
-            current_movement = requested_movement
-        else:
-            current_movement = prev_movement
+        with movement_lock:
+            if not any(switch_mode):  # means [False, False]
+                current_movement = requested_movement
+            else:
+                current_movement = prev_movement
+            c_movement = current_movement
+            p_movement = prev_movement
 
         if not use_PID:
             target_left_pwm = l_pwm
             target_right_pwm = r_pwm
         else:
-            if current_movement in [
+            if c_movement in [
                 "forward",
                 "backward",
                 "rotate_left",
                 "rotate_right",
             ]:
 
-                if current_movement in ["forward", "backward"]:
+                if c_movement in ["forward", "backward"]:
                     with encoder_lock:
                         error = omegaL_f - omegaR_f
                     # print("PID released encoder lock")
@@ -263,7 +265,7 @@ def pid_control():
                         alpha * last_derivative_linear + (1 - alpha) * derivative
                     )
                     last_derivative_linear = derivative
-                    if current_movement == "forward":
+                    if c_movement == "forward":
                         integral_linear_forward += KI * error * dt
                         integral_linear_forward = clamp(
                             integral_linear_forward, -MAX_INTEGRAL, MAX_INTEGRAL
@@ -276,7 +278,7 @@ def pid_control():
 
                     I = (
                         integral_linear_forward
-                        if current_movement == "forward"
+                        if c_movement == "forward"
                         else integral_linear_back
                     )
                     last_error_linear = error
@@ -294,7 +296,7 @@ def pid_control():
                         alpha * last_derivative_rotation + (1 - alpha) * derivative
                     )
                     last_derivative_rotation = derivative
-                    if current_movement == "rotate_left":
+                    if c_movement == "rotate_left":
                         integral_rotation_left += rKI * error * dt
                         integral_rotation_left = clamp(
                             integral_rotation_left, -MAX_INTEGRAL, MAX_INTEGRAL
@@ -307,7 +309,7 @@ def pid_control():
 
                     I = (
                         integral_rotation_left
-                        if current_movement == "rotate_left"
+                        if c_movement == "rotate_left"
                         else integral_rotation_right
                     )
                     last_error_rotation = error
@@ -316,10 +318,10 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
 
-                if current_movement in ["forward", "backward"]:
+                if c_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
-                elif current_movement in ["rotate_left", "rotate_right"]:
+                elif c_movement in ["rotate_left", "rotate_right"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm - correction
             else:
@@ -546,6 +548,7 @@ def measure_velocities():
     time2stop = 0.5
     last_tick_L = 0
     last_tick_R = 0
+    last_time = time.monotonic()
 
     while running:
         with pwm_lock:
@@ -561,7 +564,7 @@ def measure_velocities():
         # print("Velocity released encoder lock")
 
         now = time.monotonic()
-        if last_L is None or last_R is None or last_time is None:
+        if last_L is None or last_R is None:
             last_L = L
             last_R = R
             last_time = now
@@ -644,9 +647,9 @@ def main():
         pid_config_thread.start()
 
         # Start velocity measurement thread
-        # velocity_thread = threading.Thread(target=measure_velocities)
-        # velocity_thread.daemon = True
-        # velocity_thread.start()
+        velocity_thread = threading.Thread(target=measure_velocities)
+        velocity_thread.daemon = True
+        velocity_thread.start()
 
         # Start wheel server (main thread)
         wheel_server()
