@@ -546,7 +546,7 @@ def measure_velocities():
             R = right_count
 
         now = time.monotonic()
-        if last_L is None:
+        if last_L is None or last_R is None or last_time is None:
             last_L = L
             last_R = R
             last_time = now
