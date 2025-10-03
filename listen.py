@@ -370,7 +370,9 @@ def pid_control():
 
         final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
         final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
+        print("trying to set motors")
         set_motors(final_left_pwm, final_right_pwm)
+        print("set motors")
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
@@ -540,11 +542,15 @@ def measure_velocities():
     max_omega = 2  # Big jump protection
     baseline = 0.115
     time2stop = 0.5
+    last_tick_L = 0
+    last_tick_R = 0
 
     while running:
         with pwm_lock:
-            sL = left_pwm / abs(left_pwm) if left_pwm != 0 else 0
-            sR = right_pwm / abs(right_pwm) if right_pwm != 0 else 0
+            l_pwm = left_pwm
+            r_pwm = right_pwm
+        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else 0
+        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else 0
         # print("Velocity released PWM lock")
 
         with encoder_lock:
@@ -621,9 +627,9 @@ def main():
         setup_gpio()
 
         # Start PID control thread
-        pid_thread = threading.Thread(target=pid_control)
-        pid_thread.daemon = True
-        pid_thread.start()
+        # pid_thread = threading.Thread(target=pid_control)
+        # pid_thread.daemon = True
+        # pid_thread.start()
 
         # Start camera streaming thread
         camera_thread = threading.Thread(target=camera_stream_server)
@@ -636,9 +642,9 @@ def main():
         pid_config_thread.start()
 
         # Start velocity measurement thread
-        velocity_thread = threading.Thread(target=measure_velocities)
-        velocity_thread.daemon = True
-        velocity_thread.start()
+        # velocity_thread = threading.Thread(target=measure_velocities)
+        # velocity_thread.daemon = True
+        # velocity_thread.start()
 
         # Start wheel server (main thread)
         wheel_server()
