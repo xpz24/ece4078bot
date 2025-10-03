@@ -219,8 +219,10 @@ def pid_control():
             l_pwm = left_pwm
             r_pwm = right_pwm
 
-        dLc = (l_pwm / abs(l_pwm)) * (l_count - last_L_count)
-        dRc = (r_pwm / abs(r_pwm)) * (r_count - last_R_count)
+        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else 0
+        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else 0
+        dLc = sL * (l_count - last_L_count)
+        dRc = sR * (r_count - last_R_count)
         last_L_count = l_count
         last_R_count = r_count
         current_time = monotonic()
