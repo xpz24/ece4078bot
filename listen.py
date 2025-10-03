@@ -192,21 +192,17 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 
 def pid_control():
-    # Only applies for forward/backward, not turning
     global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement
-
-    # print("PID released lock")
-
     integral_rotation_left = 0.0
     integral_rotation_right = 0.0
     integral_linear_forward = 0.0
     integral_linear_back = 0.0
+    I = 0.0
     last_error_rotation = 0.0
     last_error_linear = 0.0
     last_time = monotonic()
     switch_mode = [False, False]  # [left, right]
     ramping = [False, False]  # [left, right]
-    last_L_count, last_R_count = 0, 0
 
     # Ramping variables & params
     ramp_left_pwm = 0
@@ -220,12 +216,6 @@ def pid_control():
             l_pwm = left_pwm
             r_pwm = right_pwm
 
-        # sL = l_pwm / abs(l_pwm) if l_pwm != 0 else 0
-        # sR = r_pwm / abs(r_pwm) if r_pwm != 0 else 0
-        # dLc = sL * (l_count - last_L_count)
-        # dRc = sR * (r_count - last_R_count)
-        # last_L_count = l_count
-        # last_R_count = r_count
         current_time = monotonic()
         dt = current_time - last_time
         last_time = current_time
@@ -243,11 +233,12 @@ def pid_control():
         else:
             requested_movement = "rotate_right"
 
+        current_movement = requested_movement
         # Only switch once both ramps have finished braking/accelerating
-        if not any(switch_mode):  # means [False, False]
-            current_movement = requested_movement
-        else:
-            current_movement = prev_movement
+        # if not any(switch_mode):  # means [False, False]
+        #     current_movement = requested_movement
+        # else:
+        #     current_movement = prev_movement
 
         if not use_PID:
             target_left_pwm = l_pwm
@@ -261,59 +252,62 @@ def pid_control():
             ]:
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
-                    # error = dLc - dRc
                     last_error_rotation = 0
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
 
-                    if not any(ramping):
-                        if current_movement == "forward":
-                            integral_linear_forward += KI * error * dt
-                            integral_linear_forward = clamp(
-                                integral_linear_forward, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-                        else:
-                            integral_linear_back += KI * error * dt
-                            integral_linear_back = clamp(
-                                integral_linear_back, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
+                    # if not any(ramping):
+                    #     if current_movement == "forward":
+                    #         integral_linear_forward += KI * error * dt
+                    #         integral_linear_forward = clamp(
+                    #             integral_linear_forward, -MAX_INTEGRAL, MAX_INTEGRAL
+                    #         )
+                    #     else:
+                    #         integral_linear_back += KI * error * dt
+                    #         integral_linear_back = clamp(
+                    #             integral_linear_back, -MAX_INTEGRAL, MAX_INTEGRAL
+                    #         )
 
-                        I = (
-                            integral_linear_forward
-                            if current_movement == "forward"
-                            else integral_linear_back
-                        )
-                    else:
-                        I = 0.0
+                    #     I = (
+                    #         integral_linear_forward
+                    #         if current_movement == "forward"
+                    #         else integral_linear_back
+                    #     )
+                    # else:
+                    #     I = 0.0
+                    I += I + KI * error * dt
+                    I = clamp(I, -MAX_INTEGRAL, MAX_INTEGRAL)
                     last_error_linear = error
                     proportional = KP * error
                     correction = clamp(
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
+
                     last_error_linear = 0
-                    # error = dLc + dRc
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
-                    if not any(ramping):
-                        if current_movement == "rotate_left":
-                            integral_rotation_left += rKI * error * dt
-                            integral_rotation_left = clamp(
-                                integral_rotation_left, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-                        else:
-                            integral_rotation_right += rKI * error * dt
-                            integral_rotation_right = clamp(
-                                integral_rotation_right, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
+                    # if not any(ramping):
+                    #     if current_movement == "rotate_left":
+                    #         integral_rotation_left += rKI * error * dt
+                    #         integral_rotation_left = clamp(
+                    #             integral_rotation_left, -MAX_INTEGRAL, MAX_INTEGRAL
+                    #         )
+                    #     else:
+                    #         integral_rotation_right += rKI * error * dt
+                    #         integral_rotation_right = clamp(
+                    #             integral_rotation_right, -MAX_INTEGRAL, MAX_INTEGRAL
+                    #         )
 
-                        I = (
-                            integral_rotation_left
-                            if current_movement == "rotate_left"
-                            else integral_rotation_right
-                        )
-                    else:
-                        I = 0.0
+                    #     I = (
+                    #         integral_rotation_left
+                    #         if current_movement == "rotate_left"
+                    #         else integral_rotation_right
+                    #     )
+                    # else:
+                    #     I = 0.0
+                    I += I + rKI * error * dt
+                    I = clamp(I, -MAX_INTEGRAL, MAX_INTEGRAL)
                     last_error_rotation = error
                     proportional = rKP * error
                     correction = clamp(
@@ -389,10 +383,6 @@ def pid_control():
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
-        # with encoder_lock:
-        #     print(
-        #         f"left_count={left_count}, right_count={right_count}, diff={left_count-right_count}, correction={correction if use_PID else 0}"
-        #     )
         time.sleep(0.01)
 
 
