@@ -206,7 +206,6 @@ def pid_control():
     last_time = monotonic()
     last_derivative_linear = 0.0
     last_derivative_rotation = 0.0
-    alpha = 0.1
     switch_mode = [False, False]  # [left, right]
 
     # Ramping variables & params
@@ -265,10 +264,6 @@ def pid_control():
                     # print("PID released encoder lock")
                     # print(f"linear! leftV {left_v}, rightV{right_v}")
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
-                    derivative = (
-                        alpha * last_derivative_linear + (1 - alpha) * derivative
-                    )
-                    last_derivative_linear = derivative
                     if c_movement == "forward":
                         integral_linear_forward += KI * error * dt
                         integral_linear_forward = clamp(
@@ -296,10 +291,6 @@ def pid_control():
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
                     )
-                    derivative = (
-                        alpha * last_derivative_rotation + (1 - alpha) * derivative
-                    )
-                    last_derivative_rotation = derivative
                     if c_movement == "rotate_left":
                         integral_rotation_left += rKI * error * dt
                         integral_rotation_left = clamp(
@@ -548,7 +539,7 @@ def measure_velocities():
 
     ticks_per_rev = 20
     r = 0.033
-    alpha = 1  # tau = T/alpha -> 0.005/0.1 = 50ms
+    alpha = 0.3  # tau = T/alpha -> 0.005/0.1 = 50ms
     max_omega = 100  # Big jump protection
     baseline = 0.115
     time2stop = 0.3
