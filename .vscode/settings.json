@@ -1,11 +1,14 @@
 {
     "cSpell.words": [
         "deadband",
+        "Golay",
         "gpio",
         "picam",
         "picamera",
         "Picamera",
         "REUSEADDR",
+        "savgol",
+        "Savitzky",
         "setwarnings"
     ]
 }

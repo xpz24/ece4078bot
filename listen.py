@@ -8,6 +8,7 @@ from time import monotonic
 from collections import deque
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
+from scipy.signal import savgol_filter
 
 # Network Configuration
 HOST = "0.0.0.0"
@@ -33,6 +34,7 @@ MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
 WINDOW_SIZE = 5
+POLY_ORDER = 2
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
@@ -63,7 +65,7 @@ movement_lock = threading.Lock()
 
 # ---- config ----
 C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
-T_ENV = 0.12  # 0.12–0.22s feels good
+T_ENV = 0.05  # 0.12–0.22s feels good
 BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
 
 # ---- persistent state (module-scope) ----
@@ -609,14 +611,9 @@ def measure_velocities():
 
     ticks_per_rev = 20
     r = 0.033
-    alpha = 0.5  # tau = T/alpha -> 0.005/0.1 = 50ms
+    alpha = 1  # tau = T/alpha -> 0.005/0.1 = 50ms
     max_omega = 80  # Big jump protection
     baseline = 0.115
-    # time2stop = 0.3
-    # last_tick_L = 0
-    # last_tick_R = 0
-    # last_omegaL = 0.0
-    # last_omegaR = 0.0
     last_time = time.monotonic()
 
     while running:
@@ -654,23 +651,40 @@ def measure_velocities():
         if abs(omegaR) > max_omega:
             omegaR = 0.0
 
+        omegaL_q.append(omegaL)
+        omegaR_q.append(omegaR)
+
+        if len(omegaL_q) >= WINDOW_SIZE:
+            omegaL = savgol_filter(
+                omegaL_q, window_length=WINDOW_SIZE, polyorder=POLY_ORDER
+            )[-1]
+            omegaR = savgol_filter(
+                omegaR_q, window_length=WINDOW_SIZE, polyorder=POLY_ORDER
+            )[-1]
+
         vL = omegaL * r
         vR = omegaR * r
-        # omegaL_q.append(omegaL)
-        # omegaR_q.append(omegaR)
 
-        Vq.append((vL + vR) / 2)
-        Wq.append((vR - vL) / baseline)
+        # Vq.append((vL + vR) / 2)
+        # Wq.append((vR - vL) / baseline)
 
         with encoder_lock:
-            # omegaL_f = sum(omegaL_q)/len(omegaL_q) if len(omegaL_q) > 0 else 0.0
-            # omegaR_f = sum(omegaR_q)/len(omegaR_q) if len(omegaR_q) > 0 else 0.0
+            # # Using moving average for smoothing
             # V = sum(Vq)/len(Vq) if len(Vq) > 0 else 0.0
             # W = sum(Wq)/len(Wq) if len(Wq) > 0 else 0.0
-            V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
-            W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
-            omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
-            omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
+            # omegaL_f = sum(omegaL_q)/len(omegaL_q) if len(omegaL_q) > 0 else 0.0
+            # omegaR_f = sum(omegaR_q)/len(omegaR_q) if len(omegaR_q) > 0 else 0.0
+            # # Using exponential moving average for smoothing
+            # V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
+            # W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
+            # omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
+            # omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
+            # # Using Savitzky-Golay filter for smoothing
+            V = (vL + vR) / 2
+            W = (vR - vL) / baseline
+            omegaL_f = omegaL
+            omegaR_f = omegaR
+
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
         # print("Velocity released encoder lock 2")
