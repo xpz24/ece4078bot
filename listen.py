@@ -317,7 +317,7 @@ def pid_control():
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
                     if prev_movement in ["rotate_left", "rotate_right"]:
-                        integral *= 0.5  # ? Decay instead of reset?
+                        integral = 0.0  # ? Decay instead of reset?
                         last_error = 0.0
                         reset_encoder()
 
@@ -326,14 +326,14 @@ def pid_control():
                     integral += KI * error * dt
                 else:
                     if prev_movement in ["forward", "backward"]:
-                        integral *= 0.5
+                        integral = 0.0
                         last_error = 0.0
                         reset_encoder()
                     proportional = rKP * error
                     derivative = rKD * (error - last_error) / dt if dt > 0 else 0
                     integral += rKI * error * dt
 
-                integral = clamp(integral, -MAX_INTEGRAL, MAX_INTEGRAL) * 0.995
+                integral = clamp(integral, -MAX_INTEGRAL, MAX_INTEGRAL)
                 correction = clamp(
                     proportional + integral + derivative,
                     -MAX_CORRECTION,
@@ -356,11 +356,11 @@ def pid_control():
                 target_left_pwm = l_pwm
                 target_right_pwm = r_pwm
 
-        now = time.monotonic()
-        is_rotation = current_movement in ("rotate_left", "rotate_right")
+        # now = time.monotonic()
+        # is_rotation = current_movement in ("rotate_left", "rotate_right")
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
-            effective_dt = dt * (1 if not is_rotation else _duty)
+            effective_dt = dt #* (1 if not is_rotation else _duty)
             max_a = max(1e-9, RAMP_RATE_ACC * effective_dt)
             max_d = max(1e-9, RAMP_RATE_DEC * effective_dt)
 
@@ -384,25 +384,25 @@ def pid_control():
                 switch_mode_list[index] = False
                 return signed_step(curr, tgt, max_a)
 
-            if not is_rotation or _env_on:
-                ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
-                ramp_right_pwm = ramp_one(
-                    ramp_right_pwm, target_right_pwm, switch_mode, 1
-                )
+            # if not is_rotation or _env_on:
+            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
+            ramp_right_pwm = ramp_one(
+                ramp_right_pwm, target_right_pwm, switch_mode, 1
+            )
         else:
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        env_L, env_R, used_env = rotate_envelope(
-            ramp_left_pwm, ramp_right_pwm, is_rotation, now
-        )
+        # env_L, env_R, used_env = rotate_envelope(
+        #     ramp_left_pwm, ramp_right_pwm, is_rotation, now
+        # )
 
-        if used_env:
-            final_left_pwm = env_L
-            final_right_pwm = env_R
-        else:
-            final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
-            final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
+        # if used_env:
+        #     final_left_pwm = env_L
+        #     final_right_pwm = env_R
+        # else:
+        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
+        final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
 
         set_motors(final_left_pwm, final_right_pwm)
         # print(f"Set motors: L={final_left_pwm:.2f}, R={final_right_pwm:.2f}")
