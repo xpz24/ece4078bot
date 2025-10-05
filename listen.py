@@ -46,7 +46,6 @@ vL_f, vR_f = 0.0, 0.0
 Wq = deque(maxlen=WINDOW_SIZE)
 Vq = deque(maxlen=WINDOW_SIZE)
 W, V = 0.0, 0.0
-dt = 0.0
 last_L = 0
 last_R = 0
 last_time = None
@@ -557,7 +556,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, vL_f, vR_f, V, W, dt
+    global left_pwm, right_pwm, running, vL_f, vR_f, V, W
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -591,7 +590,7 @@ def wheel_server():
 
                     # Send vL_f, vR_f, V, W back
                     with encoder_lock:
-                        response = struct.pack("!fffff", vL_f, vR_f, V, W, dt)
+                        response = struct.pack("!ffff", vL_f, vR_f, V, W)
                     client_socket.sendall(response)
                     time.sleep(0.001)
 
@@ -638,17 +637,15 @@ def measure_velocities():
             last_time = now
             continue
 
-        with encoder_lock:
-            dt = now - last_time
-        dt_loop = now - last_time
+        dt = now - last_time
         last_time = now
         dL = L - last_L
         dR = R - last_R
         last_L = L
         last_R = R
 
-        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt_loop
-        omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt_loop
+        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt   
+        omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
         # This is ok since big jump can only occur for one cycle
         if abs(omegaL) > max_omega:
             omegaL = 0.0
