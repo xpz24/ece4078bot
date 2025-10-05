@@ -606,6 +606,7 @@ def measure_velocities():
     last_time = time.monotonic()
     sL, sR = 1, 1
     last_L, last_R = 0, 0
+    omegaL_f, omegaR_f = 0.0, 0.0
 
     while running:
         with pwm_lock:
