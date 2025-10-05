@@ -607,6 +607,7 @@ def measure_velocities():
     sL, sR = 1, 1
     last_L, last_R = 0, 0
     omegaL_f, omegaR_f = 0.0, 0.0
+    old_tempW = 0.0
 
     while running:
         with pwm_lock:
@@ -641,10 +642,16 @@ def measure_velocities():
         omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
         omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
 
+        tempW = (vR - vL) / baseline
+        if abs(tempW) > 0 and abs(old_tempW) > 0 and abs(tempW / old_tempW) > 2:
+            tempW = old_tempW
+        old_tempW = tempW
+
         with encoder_lock:
             # # Using exponential moving average for smoothing
             V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
-            W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
+            # W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
+            W = (1 - alpha) * W + alpha * tempW
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
 
