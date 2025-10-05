@@ -270,6 +270,10 @@ def pid_control():
     switch_mode = [False, False]
     ramp_left_pwm = 0
     ramp_right_pwm = 0
+    last_lc = 0
+    last_rc = 0
+    dL = 0
+    dR = 0
 
     while running:
         with encoder_lock:
@@ -312,8 +316,13 @@ def pid_control():
                 "rotate_left",
                 "rotate_right",
             ]:
-                error = l_count - r_count
+                dL = l_count - last_lc
+                dR = r_count - last_rc
+                # error = l_count - r_count
+                error = dL - dR
                 if current_movement in ["forward", "backward"]:
+                    last_lc = l_count
+                    last_rc = r_count
                     if prev_movement in ["rotate_left", "rotate_right"]:
                         integral = 0.0  # ? Decay instead of reset?
                         last_error = 0.0
@@ -327,10 +336,9 @@ def pid_control():
                         integral = 0.0
                         last_error = 0.0
                         reset_encoder()
-                    elif not _env_on:
-                        error = 0
-                        last_error = 0
-                        integral = 0
+                    if _env_on:
+                        last_lc = l_count
+                        last_rc = r_count
                     proportional = rKP * error
                     derivative = rKD * (error - last_error) / dt if dt > 0 else 0
                     integral += rKI * error * dt
