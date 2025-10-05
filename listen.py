@@ -605,6 +605,7 @@ def measure_displacement():
     last_Rc = 0
     mPerTick = 2 * math.pi * r / ticks_per_rev
     signL, signR = 1, 1
+    last_dLc, last_dRc = 0, 0
 
     while running:
         with pwm_lock:
@@ -623,6 +624,7 @@ def measure_displacement():
             dLc = 0
         elif dRc > max_dLR:
             dRc = 0
+
         last_Lc = Lc
         last_Rc = Rc
 
@@ -630,7 +632,7 @@ def measure_displacement():
             sL = signL * dLc * mPerTick
             sR = signR * dRc * mPerTick
             ds = (sL + sR) / 2
-            dth = (sR - sL) / baseline
+            dth = (1 - 0.2) * dth + 0.2((sR - sL) / baseline)
 
         time.sleep(0.1)
 
