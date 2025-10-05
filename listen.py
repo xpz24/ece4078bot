@@ -205,7 +205,7 @@ def set_motors(left, right):
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
-    
+
     if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
         # brief symmetrical 100% kick to overcome static friction
         if c_movement == "rotate_left":
@@ -221,7 +221,7 @@ def set_motors(left, right):
 
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
-        time.sleep(0.03)  # shorter than linear kick (rotation needs less) 
+        time.sleep(0.03)  # shorter than linear kick (rotation needs less)
 
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
@@ -327,6 +327,10 @@ def pid_control():
                         integral = 0.0
                         last_error = 0.0
                         reset_encoder()
+                    elif not _env_on:
+                        error = 0
+                        last_error = 0
+                        integral = 0
                     proportional = rKP * error
                     derivative = rKD * (error - last_error) / dt if dt > 0 else 0
                     integral += rKI * error * dt
@@ -398,9 +402,6 @@ def pid_control():
         if used_env:
             final_left_pwm = env_L
             final_right_pwm = env_R
-            if not _env_on:
-                error = 0
-                last_error = 0
         else:
             final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
             final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
