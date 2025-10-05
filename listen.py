@@ -1,5 +1,3 @@
-from bdb import effective
-import re
 import socket
 import struct
 import io
@@ -57,8 +55,8 @@ movement_lock = threading.Lock()
 # ---- config ----
 C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
 T_ENV = 0.03  # 0.12–0.22s feels good
-BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
-BASELINE_RATIO = 0.50
+BYPASS_ABOVE_CARRIER = True  # switch to continuous when > C_ROT
+BASELINE_RATIO = 0.5
 
 # ---- persistent state (module-scope) ----
 _env_phase_end = None
@@ -356,11 +354,11 @@ def pid_control():
                 target_left_pwm = l_pwm
                 target_right_pwm = r_pwm
 
-        # now = time.monotonic()
-        # is_rotation = current_movement in ("rotate_left", "rotate_right")
+        now = time.monotonic()
+        is_rotation = current_movement in ("rotate_left", "rotate_right")
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
-            effective_dt = dt #* (1 if not is_rotation else _duty)
+            effective_dt = dt * (1 if not is_rotation else _duty)
             max_a = max(1e-9, RAMP_RATE_ACC * effective_dt)
             max_d = max(1e-9, RAMP_RATE_DEC * effective_dt)
 
@@ -384,25 +382,25 @@ def pid_control():
                 switch_mode_list[index] = False
                 return signed_step(curr, tgt, max_a)
 
-            # if not is_rotation or _env_on:
-            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
-            ramp_right_pwm = ramp_one(
-                ramp_right_pwm, target_right_pwm, switch_mode, 1
-            )
+            if not is_rotation or _env_on:
+                ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
+                ramp_right_pwm = ramp_one(
+                    ramp_right_pwm, target_right_pwm, switch_mode, 1
+                )
         else:
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        # env_L, env_R, used_env = rotate_envelope(
-        #     ramp_left_pwm, ramp_right_pwm, is_rotation, now
-        # )
+        env_L, env_R, used_env = rotate_envelope(
+            ramp_left_pwm, ramp_right_pwm, is_rotation, now
+        )
 
-        # if used_env:
-        #     final_left_pwm = env_L
-        #     final_right_pwm = env_R
-        # else:
-        final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
-        final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
+        if used_env:
+            final_left_pwm = env_L
+            final_right_pwm = env_R
+        else:
+            final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
+            final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
 
         set_motors(final_left_pwm, final_right_pwm)
         # print(f"Set motors: L={final_left_pwm:.2f}, R={final_right_pwm:.2f}")
