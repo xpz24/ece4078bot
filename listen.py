@@ -301,8 +301,8 @@ def pid_control():
             ]:
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
-                    integral_rotation_left = 0
-                    integral_rotation_right = 0
+                    # integral_rotation_left = 0
+                    # integral_rotation_right = 0
                     last_error_rotation = 0
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
 
@@ -331,8 +331,8 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
-                    integral_linear_forward = 0
-                    integral_linear_back = 0
+                    # integral_linear_forward = 0
+                    # integral_linear_back = 0
                     last_error_linear = 0
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
@@ -372,10 +372,10 @@ def pid_control():
                     target_right_pwm = r_pwm - correction
             else:
                 # Reset when stopped
-                integral_linear_forward = 0
-                integral_linear_back = 0
-                integral_rotation_right = 0
-                integral_rotation_left = 0
+                # integral_linear_forward = 0
+                # integral_linear_back = 0
+                # integral_rotation_right = 0
+                # integral_rotation_left = 0
                 last_error_linear = 0
                 last_error_rotation = 0
                 reset_encoder()
