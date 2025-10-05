@@ -341,14 +341,14 @@ def pid_control():
                 )
                 last_error = error
 
-                if current_movement in ["backward", "rotate_left"]:
+                if current_movement == "backward":
                     correction = -correction
                 if current_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
-                elif current_movement in ["rotate_left", "rotate_right"]:
-                    target_left_pwm = l_pwm - correction
-                    target_right_pwm = r_pwm - correction
+                elif current_movement in ["rotate_right", "rotate_left"]:
+                    target_left_pwm = l_pwm + correction
+                    target_right_pwm = r_pwm + correction
             else:
                 reset_encoder()
                 integral = 0
