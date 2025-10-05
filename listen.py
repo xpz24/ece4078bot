@@ -384,20 +384,17 @@ def pid_control():
                 switch_mode_list[index] = False
                 return signed_step(curr, tgt, max_a)
 
-            # if not is_rotation or _env_on:
-            ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
-            ramp_right_pwm = ramp_one(
-                ramp_right_pwm, target_right_pwm, switch_mode, 1
-            )
+            if not is_rotation or _env_on:
+                ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
+                ramp_right_pwm = ramp_one(
+                    ramp_right_pwm, target_right_pwm, switch_mode, 1
+                )
         else:
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        # env_L, env_R, used_env = rotate_envelope(
-        #     ramp_left_pwm, ramp_right_pwm, is_rotation, now
-        # )
         env_L, env_R, used_env = rotate_envelope(
-            target_left_pwm, target_right_pwm, is_rotation, now
+            ramp_left_pwm, ramp_right_pwm, is_rotation, now
         )
 
         if used_env:
