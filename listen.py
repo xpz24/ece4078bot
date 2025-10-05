@@ -4,8 +4,6 @@ import io
 import threading
 import time
 import math
-from time import monotonic
-from collections import deque
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
 
@@ -30,25 +28,15 @@ RIGHT_ENCODER = 16
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
 KP, Ki, KD, rKP, rKI, rKD = 0, 0, 0, 0, 0, 0
-MAX_CORRECTION = 80  # Maximum PWM correction value
+MAX_CORRECTION = 30  # Maximum PWM correction value
 MAX_INTEGRAL = MAX_CORRECTION
 
 # Global variables
-WINDOW_SIZE = 5
-POLY_ORDER = 2
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
-omegaL_f, omegaR_f = 0.0, 0.0
-omegaL_q = deque(maxlen=WINDOW_SIZE)
-omegaR_q = deque(maxlen=WINDOW_SIZE)
 vL_f, vR_f = 0.0, 0.0
-Wq = deque(maxlen=WINDOW_SIZE)
-Vq = deque(maxlen=WINDOW_SIZE)
 W, V = 0.0, 0.0
-last_L = 0
-last_R = 0
-last_time = None
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -260,7 +248,7 @@ def pid_control():
     integral_linear_back = 0.0
     last_error_rotation = 0.0
     last_error_linear = 0.0
-    last_time = monotonic()
+    last_time = time.monotonic()
     switch_mode = [False, False]  # [left, right]
     ramping = [False, False]  # [left, right]
 
@@ -276,7 +264,7 @@ def pid_control():
             l_pwm = left_pwm
             r_pwm = right_pwm
 
-        current_time = monotonic()
+        current_time = time.monotonic()
         dt = current_time - last_time
         last_time = current_time
 
@@ -311,8 +299,8 @@ def pid_control():
             ]:
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
-                    integral_rotation_left = 0
-                    integral_rotation_right = 0
+                    # integral_rotation_left = 0
+                    # integral_rotation_right = 0
                     last_error_rotation = 0
                     derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
 
@@ -341,8 +329,8 @@ def pid_control():
                         proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
                     )
                 else:
-                    integral_linear_forward = 0
-                    integral_linear_back = 0
+                    # integral_linear_forward = 0
+                    # integral_linear_back = 0
                     last_error_linear = 0
                     derivative = (
                         rKD * (error - last_error_rotation) / dt if dt > 0 else 0
@@ -382,10 +370,10 @@ def pid_control():
                     target_right_pwm = r_pwm - correction
             else:
                 # Reset when stopped
-                integral_linear_forward = 0
-                integral_linear_back = 0
-                integral_rotation_right = 0
-                integral_rotation_left = 0
+                # integral_linear_forward = 0
+                # integral_linear_back = 0
+                # integral_rotation_right = 0
+                # integral_rotation_left = 0
                 last_error_linear = 0
                 last_error_rotation = 0
                 reset_encoder()
@@ -434,7 +422,7 @@ def pid_control():
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        now = monotonic()
+        now = time.monotonic()
         is_rotation = current_movement in ("rotate_left", "rotate_right")
 
         # ramp_left_pwm / ramp_right_pwm are your existing ramp outputs
@@ -608,35 +596,29 @@ def wheel_server():
 
 
 def measure_velocities():
-    global last_L, last_R, last_time, omegaL_f, omegaR_f, vL_f, vR_f, V, W, dt
+    global vL_f, vR_f, V, W
 
-    ticks_per_rev = 20
+    ticks_per_rev = 40
     r = 0.033
-    alpha = 0.9  # tau = T/alpha -> 0.005/0.1 = 50ms
-    max_omega = 80  # Big jump protection
+    alpha = 0.9
+    max_omega = 80
     baseline = 0.115
     last_time = time.monotonic()
+    sL, sR = 1, 1
+    last_L, last_R = 0, 0
 
     while running:
         with pwm_lock:
             l_pwm = left_pwm
             r_pwm = right_pwm
-        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else 0
-        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else 0
-        # print("Velocity released PWM lock")
+        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else sL
+        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else sR
 
         with encoder_lock:
             L = left_count
             R = right_count
-        # print("Velocity released encoder lock")
 
         now = time.monotonic()
-        if last_L is None or last_R is None:
-            last_L = L
-            last_R = R
-            last_time = now
-            continue
-
         dt = now - last_time
         last_time = now
         dL = L - last_L
@@ -644,7 +626,7 @@ def measure_velocities():
         last_L = L
         last_R = R
 
-        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt   
+        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
         omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
         # This is ok since big jump can only occur for one cycle
         if abs(omegaL) > max_omega:
@@ -652,46 +634,18 @@ def measure_velocities():
         if abs(omegaR) > max_omega:
             omegaR = 0.0
 
-        omegaL_q.append(omegaL)
-        omegaR_q.append(omegaR)
-
-        # if len(omegaL_q) >= WINDOW_SIZE:
-        #     omegaL = savgol_filter(
-        #         omegaL_q, window_length=WINDOW_SIZE, polyorder=POLY_ORDER
-        #     )[-1]
-        #     omegaR = savgol_filter(
-        #         omegaR_q, window_length=WINDOW_SIZE, polyorder=POLY_ORDER
-        #     )[-1]
-
         vL = omegaL * r
         vR = omegaR * r
 
-        # Vq.append((vL + vR) / 2)
-        # Wq.append((vR - vL) / baseline)
+        omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
+        omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
 
         with encoder_lock:
-            # # Using moving average for smoothing
-            # V = sum(Vq)/len(Vq) if len(Vq) > 0 else 0.0
-            # W = sum(Wq)/len(Wq) if len(Wq) > 0 else 0.0
-            # omegaL_f = sum(omegaL_q)/len(omegaL_q) if len(omegaL_q) > 0 else 0.0
-            # omegaR_f = sum(omegaR_q)/len(omegaR_q) if len(omegaR_q) > 0 else 0.0
             # # Using exponential moving average for smoothing
             V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
             W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
-            omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
-            omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
-            # # Using Savitzky-Golay filter for smoothing
-            # V = (vL + vR) / 2
-            # W = (vR - vL) / baseline
-            # omegaL_f = omegaL
-            # omegaR_f = omegaR
-
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
-        # print("Velocity released encoder lock 2")
-        # print(
-        #     f"Measured velocities: vL_f={vL_f:.4f}, vR_f={vR_f:.4f}, wL_f={omegaL_f:.4f}, wR_f={omegaR_f:.4f}, V={V:.4f}, W={W:.4f}"
-        # )
 
         time.sleep(0.1)
 
