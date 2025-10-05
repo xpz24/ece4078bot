@@ -398,6 +398,9 @@ def pid_control():
         if used_env:
             final_left_pwm = env_L
             final_right_pwm = env_R
+            if not _env_on:
+                error = 0
+                last_error = 0
         else:
             final_left_pwm = apply_min_threshold(ramp_left_pwm, MIN_PWM_THRESHOLD)
             final_right_pwm = apply_min_threshold(ramp_right_pwm, MIN_PWM_THRESHOLD)
