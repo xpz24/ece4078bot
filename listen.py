@@ -1,3 +1,4 @@
+from bdb import effective
 import socket
 import struct
 import io
@@ -60,6 +61,7 @@ BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
 # ---- persistent state (module-scope) ----
 _env_phase_end = None
 _env_on = False
+_duty = 0.0
 
 
 def rotate_envelope(L_req, R_req, is_rotation, now):
@@ -69,7 +71,7 @@ def rotate_envelope(L_req, R_req, is_rotation, now):
       - if |req| >  C_ROT: either bypass or output continuous (duty=1).
     Returns (L_out, R_out, used_env)
     """
-    global _env_on, _env_phase_end
+    global _env_on, _env_phase_end, _duty
     if not is_rotation:
         return L_req, R_req, False
 
@@ -87,6 +89,7 @@ def rotate_envelope(L_req, R_req, is_rotation, now):
         return 0.0, 0.0, True  # safety
 
     duty = clamp(P_req / float(C_ROT), 0.0, 1.0)
+    _duty = duty
     on_time = duty * T_ENV
     off_time = max(1e-3, T_ENV - on_time)
 
@@ -242,17 +245,10 @@ def apply_min_threshold(pwm_value, min_threshold):
 def pid_control():
     global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement
 
-    integral_rotation_left = 0.0
-    integral_rotation_right = 0.0
-    integral_linear_forward = 0.0
-    integral_linear_back = 0.0
-    last_error_rotation = 0.0
-    last_error_linear = 0.0
+    integral = 0.0
+    last_error = 0.0
     last_time = time.monotonic()
-    switch_mode = [False, False]  # [left, right]
-    ramping = [False, False]  # [left, right]
-
-    # Ramping variables & params
+    switch_mode = [False, False]
     ramp_left_pwm = 0
     ramp_right_pwm = 0
 
@@ -299,66 +295,30 @@ def pid_control():
             ]:
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
-                    # integral_rotation_left = 0
-                    # integral_rotation_right = 0
-                    last_error_rotation = 0
-                    derivative = KD * (error - last_error_linear) / dt if dt > 0 else 0
+                    if prev_movement in ["rotate_left", "rotate_right"]:
+                        integral = 0.0  # ? Decay instead of reset?
+                        last_error = 0.0
+                        reset_encoder()
 
-                    if not any(ramping):
-                        if current_movement == "forward":
-                            integral_linear_forward += KI * error * dt
-                            integral_linear_forward = clamp(
-                                integral_linear_forward, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-                        else:
-                            integral_linear_back += KI * error * dt
-                            integral_linear_back = clamp(
-                                integral_linear_back, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-
-                        I = (
-                            integral_linear_forward
-                            if current_movement == "forward"
-                            else integral_linear_back
-                        )
-                    else:
-                        I = 0.0
-                    last_error_linear = error
                     proportional = KP * error
-                    correction = clamp(
-                        proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
-                    )
+                    derivative = KD * (error - last_error) / dt if dt > 0 else 0
+                    integral += KI * error * dt
                 else:
-                    # integral_linear_forward = 0
-                    # integral_linear_back = 0
-                    last_error_linear = 0
-                    derivative = (
-                        rKD * (error - last_error_rotation) / dt if dt > 0 else 0
-                    )
-                    if not any(ramping):
-                        if current_movement == "rotate_left":
-                            integral_rotation_left += rKI * error * dt
-                            integral_rotation_left = clamp(
-                                integral_rotation_left, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-                        else:
-                            integral_rotation_right += rKI * error * dt
-                            integral_rotation_right = clamp(
-                                integral_rotation_right, -MAX_INTEGRAL, MAX_INTEGRAL
-                            )
-
-                        I = (
-                            integral_rotation_left
-                            if current_movement == "rotate_left"
-                            else integral_rotation_right
-                        )
-                    else:
-                        I = 0.0
-                    last_error_rotation = error
+                    if prev_movement in ["forward", "backward"]:
+                        integral = 0.0
+                        last_error = 0.0
+                        reset_encoder()
                     proportional = rKP * error
-                    correction = clamp(
-                        proportional + I + derivative, -MAX_CORRECTION, MAX_CORRECTION
-                    )
+                    derivative = rKD * (error - last_error) / dt if dt > 0 else 0
+                    integral += rKI * error * dt
+
+                integral = clamp(integral, -MAX_INTEGRAL, MAX_INTEGRAL)
+                correction = clamp(
+                    proportional + integral + derivative,
+                    -MAX_CORRECTION,
+                    MAX_CORRECTION,
+                )
+                last_error = error
 
                 if current_movement in ["backward", "rotate_left"]:
                     correction = -correction
@@ -369,23 +329,19 @@ def pid_control():
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm - correction
             else:
-                # Reset when stopped
-                # integral_linear_forward = 0
-                # integral_linear_back = 0
-                # integral_rotation_right = 0
-                # integral_rotation_left = 0
-                last_error_linear = 0
-                last_error_rotation = 0
                 reset_encoder()
+                integral = 0
+                last_error = 0
                 target_left_pwm = l_pwm
                 target_right_pwm = r_pwm
-                # print(f'targeting stop: L={l_pwm}, R={r_pwm}')
-                # print(f"Stopped! leftV {left_v}, rightV{right_v}")
 
+        now = time.monotonic()
+        is_rotation = current_movement in ("rotate_left", "rotate_right")
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
-            max_a = max(1e-9, RAMP_RATE_ACC * dt)  # accel step (>0)
-            max_d = max(1e-9, RAMP_RATE_DEC * dt)  # decel step (>0)
+            effective_dt = dt * (1 if not is_rotation else _duty)
+            max_a = max(1e-9, RAMP_RATE_ACC * effective_dt)
+            max_d = max(1e-9, RAMP_RATE_DEC * effective_dt)
 
             def signed_step(curr, tgt, step):
                 delta = tgt - curr  # delta is SIGNED
@@ -393,14 +349,9 @@ def pid_control():
                     return curr + (delta / abs(delta)) * step
                 return tgt
 
-            def ramp_one(curr, tgt, switch_mode_list, ramping_list, index):
-                if abs(tgt - curr) < MIN_RAMP_THRESHOLD:
-                    ramping_list[index] = False
-                else:
-                    ramping_list[index] = True
+            def ramp_one(curr, tgt, switch_mode_list, index):
                 # Stop: decelerate to 0 (signed)
                 if tgt == 0.0:
-                    switch_mode_list[index] = True if curr != 0.0 else False
                     return signed_step(curr, 0.0, max_d)
 
                 # Sign change: brake to 0 first (only decel case besides stop)
@@ -412,20 +363,15 @@ def pid_control():
                 switch_mode_list[index] = False
                 return signed_step(curr, tgt, max_a)
 
-            ramp_left_pwm = ramp_one(
-                ramp_left_pwm, target_left_pwm, switch_mode, ramping, 0
-            )
-            ramp_right_pwm = ramp_one(
-                ramp_right_pwm, target_right_pwm, switch_mode, ramping, 1
-            )
+            if not is_rotation or _env_on:
+                ramp_left_pwm = ramp_one(ramp_left_pwm, target_left_pwm, switch_mode, 0)
+                ramp_right_pwm = ramp_one(
+                    ramp_right_pwm, target_right_pwm, switch_mode, 1
+                )
         else:
             ramp_left_pwm = target_left_pwm
             ramp_right_pwm = target_right_pwm
 
-        now = time.monotonic()
-        is_rotation = current_movement in ("rotate_left", "rotate_right")
-
-        # ramp_left_pwm / ramp_right_pwm are your existing ramp outputs
         env_L, env_R, used_env = rotate_envelope(
             ramp_left_pwm, ramp_right_pwm, is_rotation, now
         )
@@ -607,7 +553,6 @@ def measure_velocities():
     sL, sR = 1, 1
     last_L, last_R = 0, 0
     omegaL_f, omegaR_f = 0.0, 0.0
-    old_tempW = 0.0
 
     while running:
         with pwm_lock:
@@ -642,16 +587,10 @@ def measure_velocities():
         omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
         omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
 
-        tempW = (vR - vL) / baseline
-        if abs(tempW) > 0 and abs(old_tempW) > 0 and abs(tempW / old_tempW) > 2:
-            tempW = old_tempW
-        old_tempW = tempW
-
         with encoder_lock:
             # # Using exponential moving average for smoothing
             V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
-            # W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
-            W = (1 - alpha) * W + alpha * tempW
+            W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
 
