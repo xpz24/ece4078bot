@@ -56,9 +56,9 @@ movement_lock = threading.Lock()
 
 # ---- config ----
 C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
-T_ENV = 0.05  # 0.12–0.22s feels good
+T_ENV = 0.03  # 0.12–0.22s feels good
 BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
-BASELINE_RATIO = 0.25
+BASELINE_RATIO = 0.50
 
 # ---- persistent state (module-scope) ----
 _env_phase_end = None
@@ -317,7 +317,7 @@ def pid_control():
                 error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
                     if prev_movement in ["rotate_left", "rotate_right"]:
-                        integral = 0.0  # ? Decay instead of reset?
+                        integral *= 0.5  # ? Decay instead of reset?
                         last_error = 0.0
                         reset_encoder()
 
@@ -326,14 +326,14 @@ def pid_control():
                     integral += KI * error * dt
                 else:
                     if prev_movement in ["forward", "backward"]:
-                        integral = 0.0
+                        integral *= 0.5
                         last_error = 0.0
                         reset_encoder()
                     proportional = rKP * error
                     derivative = rKD * (error - last_error) / dt if dt > 0 else 0
                     integral += rKI * error * dt
 
-                integral = clamp(integral, -MAX_INTEGRAL, MAX_INTEGRAL)
+                integral = clamp(integral, -MAX_INTEGRAL, MAX_INTEGRAL) * 0.995
                 correction = clamp(
                     proportional + integral + derivative,
                     -MAX_CORRECTION,
@@ -360,7 +360,7 @@ def pid_control():
         is_rotation = current_movement in ("rotate_left", "rotate_right")
         if use_ramping and use_PID:
             # ensure dt>0 to avoid zero step
-            effective_dt = dt #* (1 if not is_rotation else _duty)
+            effective_dt = dt * (1 if not is_rotation else _duty)
             max_a = max(1e-9, RAMP_RATE_ACC * effective_dt)
             max_d = max(1e-9, RAMP_RATE_DEC * effective_dt)
 
