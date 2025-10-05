@@ -1,4 +1,5 @@
 from bdb import effective
+import re
 import socket
 import struct
 import io
@@ -57,6 +58,7 @@ movement_lock = threading.Lock()
 C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
 T_ENV = 0.05  # 0.12–0.22s feels good
 BYPASS_ABOVE_CARRIER = False  # switch to continuous when > C_ROT
+BASELINE_RATIO = 0.25
 
 # ---- persistent state (module-scope) ----
 _env_phase_end = None
@@ -103,13 +105,15 @@ def rotate_envelope(L_req, R_req, is_rotation, now):
         _env_on = not _env_on
         _env_phase_end = now + (on_time if _env_on else off_time)
 
+    sL = 1 if L_req >= 0 else -1
+    sR = 1 if R_req >= 0 else -1
+
     if _env_on and duty > 0.0:
-        sL = 1 if L_req >= 0 else -1
-        sR = 1 if R_req >= 0 else -1
         return sL * C_ROT, sR * C_ROT, True
     else:
-        # OFF phase: zero or active brake
-        return 0.0, 0.0, True
+        # return 0.0, 0.0, True
+        base_pwm = BASELINE_RATIO * C_ROT
+        return sL * base_pwm, sR * base_pwm, True
 
 
 def clamp(x: int | float, minimum: int | float, maximum: int | float):
@@ -203,6 +207,23 @@ def set_motors(left, right):
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
+    
+    if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
+        # brief symmetrical 100% kick to overcome static friction
+        if c_movement == "rotate_left":
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        else:  # rotate_right
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        time.sleep(0.03)  # shorter than linear kick (rotation needs less) 
 
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
