@@ -341,7 +341,7 @@ def pid_control():
                 )
                 last_error = error
 
-                if current_movement == "backward":
+                if current_movement in ["backward", "rotate_right"]:
                     correction = -correction
                 if current_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
