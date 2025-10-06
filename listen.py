@@ -1,6 +1,7 @@
 import socket
 import struct
 import io
+from sys import last_exc
 import threading
 import time
 import math
@@ -38,6 +39,8 @@ left_count, right_count = 0, 0
 vL_f, vR_f = 0.0, 0.0
 W, V = 0.0, 0.0
 sL, sR = 1, 1
+last_tick_time_L = time.monotonic()
+last_tick_time_R = time.monotonic()
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -121,6 +124,7 @@ def clamp(x: int | float, minimum: int | float, maximum: int | float):
 
 
 def setup_gpio():
+    global prev_left_state, prev_right_state
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
@@ -149,9 +153,13 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
+    # Initialize prev encoder states
+    prev_left_state = GPIO.input(LEFT_ENCODER)
+    prev_right_state = GPIO.input(RIGHT_ENCODER)
 
-def left_encoder_callback(channel):
-    global left_count, prev_left_state
+
+def left_encoder_callback():
+    global left_count, prev_left_state, last_tick_time_L
     current_state = GPIO.input(LEFT_ENCODER)
 
     # Check for actual state change. Without this, false positive happens due to electrical noise
@@ -159,23 +167,18 @@ def left_encoder_callback(channel):
     if prev_left_state is not None and current_state != prev_left_state:
         with encoder_lock:
             left_count += 1
-        prev_left_state = current_state
-
-    elif prev_left_state is None:
-        # First reading
+            last_tick_time_L = time.monotonic()
         prev_left_state = current_state
 
 
-def right_encoder_callback(channel):
-    global right_count, prev_right_state, prev_right_time
+def right_encoder_callback():
+    global right_count, prev_right_state, last_tick_time_R
     current_state = GPIO.input(RIGHT_ENCODER)
 
     if prev_right_state is not None and current_state != prev_right_state:
         with encoder_lock:
             right_count += 1
-        prev_right_state = current_state
-
-    elif prev_right_state is None:
+            last_tick_time_R = time.monotonic()
         prev_right_state = current_state
 
 
@@ -562,13 +565,17 @@ def measure_velocities():
     ticks_per_rev = 40
     r = 0.033
     alpha = 0.9
-    # max_omega = 80
     baseline = 0.115
     last_time = time.monotonic()
     last_L, last_R = 0, 0
     omegaL_f, omegaR_f = 0.0, 0.0
+    time2stop = 0.5
 
     while running:
+        now = time.monotonic()
+        dt = now - last_time
+        last_time = now
+
         with pwm_lock:
             signL = sL
             signR = sR
@@ -576,27 +583,34 @@ def measure_velocities():
         with encoder_lock:
             L = left_count
             R = right_count
+            tL = last_tick_time_L
+            tR = last_tick_time_R
 
-        now = time.monotonic()
-        dt = now - last_time
-        last_time = now
         dL = L - last_L
         dR = R - last_R
         last_L = L
         last_R = R
-        
+
         if dL < 0 or dR < 0:
             continue
 
-        omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
-        omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
-        # This is ok since big jump can only occur for one cycle
-        # if abs(omegaL) > max_omega:
-        #     omegaL = 0.0
-        # if abs(omegaR) > max_omega:
-        #     omegaR = 0.0
+        omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt if dL > 0 else None
+        omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt if dR > 0 else None
 
-        vL = omegaL * r
+        time_since_L = now - tL
+        time_since_R = now - tR
+
+        if omegaL is None and time_since_L < time2stop:
+            omegaL = signL * 2 * math.pi / (ticks_per_rev * time_since_L)
+        else:
+            omegaL = omegaL if omegaL is not None else 0.0
+
+        if omegaR is None and time_since_R < time2stop:
+            omegaR = signR * 2 * math.pi / (ticks_per_rev * time_since_R)
+        else:
+            omegaR = omegaR if omegaR is not None else 0.0
+
+        vL = omegaL * r  # ? omegaL or omegaL_f?
         vR = omegaR * r
 
         omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
@@ -609,7 +623,7 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
 
-        time.sleep(0.1)
+        time.sleep(0.01)
 
 
 def main():
