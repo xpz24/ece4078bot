@@ -280,10 +280,6 @@ def pid_control():
             l_pwm = left_pwm
             r_pwm = right_pwm
 
-        with pwm_lock:
-            sL = ramp_left_pwm / abs(ramp_left_pwm) if ramp_left_pwm != 0 else sL
-            sR = ramp_right_pwm / abs(ramp_right_pwm) if ramp_right_pwm != 0 else sR
-
         current_time = time.monotonic()
         dt = current_time - last_time
         last_time = current_time
@@ -292,14 +288,22 @@ def pid_control():
 
         if l_pwm > 0 and r_pwm > 0:
             requested_movement = "forward"
+            with pwm_lock:
+                sL, sR = 1, 1
         elif l_pwm < 0 and r_pwm < 0:
             requested_movement = "backward"
+            with pwm_lock:
+                sL, sR = -1, -1
         elif l_pwm == 0 and r_pwm == 0:
             requested_movement = "stop"
         elif l_pwm < 0 and r_pwm > 0:
             requested_movement = "rotate_left"
+            with pwm_lock:
+                sL, sR = -1, 1
         else:
             requested_movement = "rotate_right"
+            with pwm_lock:
+                sL, sR = 1, -1
 
         # Only switch once both ramps have finished braking/accelerating
         if not any(switch_mode):  # means [False, False]
