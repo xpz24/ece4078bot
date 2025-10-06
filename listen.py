@@ -271,6 +271,7 @@ def pid_control():
     switch_mode = [False, False]
     ramp_left_pwm = 0
     ramp_right_pwm = 0
+    signL, signR = 1, 1
 
     while running:
         with encoder_lock:
@@ -288,26 +289,25 @@ def pid_control():
 
         if l_pwm > 0 and r_pwm > 0:
             requested_movement = "forward"
-            with pwm_lock:
-                sL, sR = 1, 1
+            signL, signR = 1, 1
         elif l_pwm < 0 and r_pwm < 0:
             requested_movement = "backward"
-            with pwm_lock:
-                sL, sR = -1, -1
+            signL, signR = -1, -1
         elif l_pwm == 0 and r_pwm == 0:
             requested_movement = "stop"
+            signL, signR = signL, signR
         elif l_pwm < 0 and r_pwm > 0:
             requested_movement = "rotate_left"
-            with pwm_lock:
-                sL, sR = -1, 1
+            signL, signR = -1, 1
         else:
             requested_movement = "rotate_right"
-            with pwm_lock:
-                sL, sR = 1, -1
+            signL, signR = 1, -1
 
         # Only switch once both ramps have finished braking/accelerating
         if not any(switch_mode):  # means [False, False]
             current_movement = requested_movement
+            with pwm_lock:
+                sL, sR = signL, signR
         else:
             current_movement = prev_movement
 
