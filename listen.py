@@ -562,10 +562,9 @@ def measure_velocities():
     ticks_per_rev = 40
     r = 0.033
     alpha = 0.9
-    max_omega = 80
+    # max_omega = 80
     baseline = 0.115
     last_time = time.monotonic()
-    sL, sR = 1, 1
     last_L, last_R = 0, 0
     omegaL_f, omegaR_f = 0.0, 0.0
 
@@ -585,14 +584,17 @@ def measure_velocities():
         dR = R - last_R
         last_L = L
         last_R = R
+        
+        if dL < 0 or dR < 0:
+            continue
 
         omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
         omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
         # This is ok since big jump can only occur for one cycle
-        if abs(omegaL) > max_omega:
-            omegaL = 0.0
-        if abs(omegaR) > max_omega:
-            omegaR = 0.0
+        # if abs(omegaL) > max_omega:
+        #     omegaL = 0.0
+        # if abs(omegaR) > max_omega:
+        #     omegaR = 0.0
 
         vL = omegaL * r
         vR = omegaR * r
