@@ -35,12 +35,13 @@ MAX_INTEGRAL = MAX_CORRECTION
 running = True
 left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
-sL = 0.0
-sR = 0.0
-ds = 0.0
-dth = 0.0
-sign_L, sign_R = 1, 1
-displacement_seq = 0
+vL_f, vR_f = 0.0, 0.0
+W, V = 0.0, 0.0
+sL, sR = 1, 1
+last_tick_time_L = time.monotonic()
+last_tick_time_R = time.monotonic()
+last_tick_dt_L = time.monotonic()
+last_tick_dt_R = time.monotonic()
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -49,12 +50,19 @@ RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
+MIN_TICK_PERIOD = 2 * math.pi / (40 * 60)
 
 # locks
 encoder_lock = threading.Lock()
 pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
+
+# # ---- config ----
+# C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
+# T_ENV = 0.03  # 0.12–0.22s feels good
+# BYPASS_ABOVE_CARRIER = True  # switch to continuous when > C_ROT
+# BASELINE_RATIO = 0.5
 
 # # ---- persistent state (module-scope) ----
 # _env_phase_end = None
@@ -119,7 +127,6 @@ def clamp(x: int | float, minimum: int | float, maximum: int | float):
 
 def setup_gpio():
     global prev_left_state, prev_right_state
-
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
@@ -148,30 +155,38 @@ def setup_gpio():
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
 
-    # Init encoder state
+    # Initialize prev encoder states
     prev_left_state = GPIO.input(LEFT_ENCODER)
     prev_right_state = GPIO.input(RIGHT_ENCODER)
 
 
 def left_encoder_callback(channel):
-    global left_count, prev_left_state
+    global left_count, prev_left_state, last_tick_time_L, last_tick_dt_L
     current_state = GPIO.input(LEFT_ENCODER)
+    now = time.monotonic()
 
     # Check for actual state change. Without this, false positive happens due to electrical noise
     # After testing, debouncing not needed
     if prev_left_state is not None and current_state != prev_left_state:
         with encoder_lock:
-            left_count += 1
+            if (now - last_tick_time_L) > MIN_TICK_PERIOD:
+                left_count += 1
+                last_tick_dt_L = now - last_tick_time_L
+                last_tick_time_L = now
         prev_left_state = current_state
 
 
 def right_encoder_callback(channel):
-    global right_count, prev_right_state
+    global right_count, prev_right_state, last_tick_time_R, last_tick_dt_R
     current_state = GPIO.input(RIGHT_ENCODER)
+    now = time.monotonic()
 
     if prev_right_state is not None and current_state != prev_right_state:
         with encoder_lock:
-            right_count += 1
+            if (now - last_tick_time_R) > MIN_TICK_PERIOD:
+                right_count += 1
+            last_tick_dt_R = now - last_tick_time_R
+            last_tick_time_R = now
         prev_right_state = current_state
 
 
@@ -202,6 +217,23 @@ def set_motors(left, right):
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
+
+    if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
+        # brief symmetrical 100% kick to overcome static friction
+        if c_movement == "rotate_left":
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        else:  # rotate_right
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        time.sleep(0.03)  # shorter than linear kick (rotation needs less)
 
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
@@ -242,7 +274,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 
 def pid_control():
-    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, sign_L, sign_R
+    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, sL, sR
 
     integral = 0.0
     last_error = 0.0
@@ -286,7 +318,7 @@ def pid_control():
         if not any(switch_mode):  # means [False, False]
             current_movement = requested_movement
             with pwm_lock:
-                sign_L, sign_R = signL, signR
+                sL, sR = signL, signR
         else:
             current_movement = prev_movement
 
@@ -482,7 +514,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, displacement_seq
+    global left_pwm, right_pwm, running, vL_f, vR_f, V, W
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -494,7 +526,6 @@ def wheel_server():
         try:
             client_socket, _ = server_socket.accept()
             print(f"Wheel client connected")
-            last_seq_sent = -1
 
             while running:
                 try:
@@ -506,20 +537,18 @@ def wheel_server():
 
                     # Unpack speed values and convert to PWM
                     left_speed, right_speed = struct.unpack("!ff", data)
+                    # print(
+                    #     f"Received wheel: left_speed={left_speed:.4f}, right_speed={right_speed:.4f}"
+                    # )
                     with pwm_lock:
                         left_pwm, right_pwm = (
                             left_speed * 100,
                             right_speed * 100 * RIGHT_WHEEL_OFFSET,
                         )
 
-                    # Send sL, sR, ds and dth back
+                    # Send vL_f, vR_f, V, W back
                     with encoder_lock:
-                        curr_seq = displacement_seq
-                        if curr_seq != last_seq_sent:
-                            response = struct.pack("!ffff", sL, sR, ds, dth)
-                            last_seq_sent = curr_seq
-                        else:
-                            response = struct.pack("!ffff", 0, 0, 0, 0)
+                        response = struct.pack("!ffff", vL_f, vR_f, V, W)
                     client_socket.sendall(response)
                     time.sleep(0.001)
 
@@ -536,48 +565,66 @@ def wheel_server():
     server_socket.close()
 
 
-def measure_displacement():
-    global sL, sR, ds, dth, displacement_seq
+def measure_velocities():
+    global vL_f, vR_f, V, W
 
     ticks_per_rev = 40
     r = 0.033
+    alpha = 1
     baseline = 0.115
-    last_Lc = 0
-    last_Rc = 0
-    mPerTick = 2 * math.pi * r / ticks_per_rev
-    signL, signR = 1, 1
+    last_L, last_R = 0, 0
+    omegaL = omegaR = 0
+    omegaL_f, omegaR_f = 0.0, 0.0
+    last_time = time.monotonic()
 
     while running:
+        now = time.monotonic()
+        dt = now - last_time
+        last_time = now
+
+        with movement_lock:
+            cm = current_movement
+
         with pwm_lock:
-            signL = sign_L
-            signR = sign_R
+            signL = sL
+            signR = sR
 
         with encoder_lock:
-            Lc = left_count
-            Rc = right_count
+            L = left_count
+            R = right_count
+            dtL = last_tick_dt_L
+            dtR = last_tick_dt_R
 
-        dLc = Lc - last_Lc
-        dRc = Rc - last_Rc
-        last_Lc = Lc
-        last_Rc = Rc
+        dL = L - last_L
+        dR = R - last_R
+        last_L = L
+        last_R = R
 
-        # Guard against encoder resets
-        if dLc < 0:
-            last_Lc = 0
-            continue
-        elif dRc < 0:
-            last_Lc = 0
-            continue
+        if dL == 1 and dtL > 0:
+            omegaL = signL * 2 * math.pi / (ticks_per_rev * dtL)
+        elif dL > 1:
+            omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
+        elif cm == "stop":
+            omegaL = 0
 
-        if dLc != 0 and dRc != 0:
-            with encoder_lock:
-                sL = signL * dLc * mPerTick
-                sR = signR * dRc * mPerTick
-                ds = (sL + sR) / 2
-                dth = (sR - sL) / baseline
-                displacement_seq += 1
+        if dR == 1 and dtR > 0:
+            omegaR = signR * 2 * math.pi / (ticks_per_rev * dtR)
+        elif dR > 1:
+            omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
+        elif cm == "stop":
+            omegaR = 0
 
-        time.sleep(0.01)
+        omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
+        omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
+
+        with encoder_lock:
+            # # Using exponential moving average for smoothing
+            vL_f = omegaL_f * r
+            vR_f = omegaR_f * r
+            V = (vL_f + vR_f) / 2
+            W = (vR_f - vL_f) / baseline
+
+        time.sleep(0.02)
 
 
 def main():
@@ -600,7 +647,7 @@ def main():
         pid_config_thread.start()
 
         # Start velocity measurement thread
-        velocity_thread = threading.Thread(target=measure_displacement)
+        velocity_thread = threading.Thread(target=measure_velocities)
         velocity_thread.daemon = True
         velocity_thread.start()
 
