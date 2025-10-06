@@ -332,9 +332,8 @@ def pid_control():
                 "rotate_left",
                 "rotate_right",
             ]:
+                error = l_count - r_count
                 if current_movement in ["forward", "backward"]:
-                    with pwm_lock:
-                        error = (sL * l_count) - (sR * r_count)
                     if prev_movement in ["rotate_left", "rotate_right"]:
                         integral = 0.0  # ? Decay instead of reset?
                         last_error = 0.0
@@ -344,8 +343,6 @@ def pid_control():
                     derivative = KD * (error - last_error) / dt if dt > 0 else 0
                     integral += KI * error * dt
                 else:
-                    with pwm_lock:
-                        error = (sL * l_count) + (sR * r_count)
                     if prev_movement in ["forward", "backward"]:
                         integral = 0.0
                         last_error = 0.0
@@ -361,7 +358,8 @@ def pid_control():
                     MAX_CORRECTION,
                 )
                 last_error = error
-
+                if current_movement in ["backward", "rotate_left"]:
+                    correction *= -1
                 if current_movement in ["forward", "backward"]:
                     target_left_pwm = l_pwm - correction
                     target_right_pwm = r_pwm + correction
