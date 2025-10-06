@@ -1,7 +1,6 @@
 import socket
 import struct
 import io
-from sys import last_exc
 import threading
 import time
 import math
@@ -41,6 +40,8 @@ W, V = 0.0, 0.0
 sL, sR = 1, 1
 last_tick_time_L = time.monotonic()
 last_tick_time_R = time.monotonic()
+last_tick_dt_L = time.monotonic()
+last_tick_dt_R = time.monotonic()
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -158,27 +159,31 @@ def setup_gpio():
     prev_right_state = GPIO.input(RIGHT_ENCODER)
 
 
-def left_encoder_callback():
-    global left_count, prev_left_state, last_tick_time_L
+def left_encoder_callback(channel):
+    global left_count, prev_left_state, last_tick_time_L, last_tick_dt_L
     current_state = GPIO.input(LEFT_ENCODER)
+    now = time.monotonic()
 
     # Check for actual state change. Without this, false positive happens due to electrical noise
     # After testing, debouncing not needed
     if prev_left_state is not None and current_state != prev_left_state:
         with encoder_lock:
             left_count += 1
-            last_tick_time_L = time.monotonic()
+            last_tick_dt_L = now - last_tick_time_L
+            last_tick_time_L = now
         prev_left_state = current_state
 
 
-def right_encoder_callback():
-    global right_count, prev_right_state, last_tick_time_R
+def right_encoder_callback(channel):
+    global right_count, prev_right_state, last_tick_time_R, last_tick_dt_R
     current_state = GPIO.input(RIGHT_ENCODER)
+    now = time.monotonic()
 
     if prev_right_state is not None and current_state != prev_right_state:
         with encoder_lock:
             right_count += 1
-            last_tick_time_R = time.monotonic()
+            last_tick_dt_R = now - last_tick_time_R
+            last_tick_time_R = now
         prev_right_state = current_state
 
 
@@ -564,17 +569,14 @@ def measure_velocities():
 
     ticks_per_rev = 40
     r = 0.033
-    alpha = 0.9
+    alpha = 1
     baseline = 0.115
-    last_time = time.monotonic()
     last_L, last_R = 0, 0
     omegaL_f, omegaR_f = 0.0, 0.0
     time2stop = 0.5
 
     while running:
         now = time.monotonic()
-        dt = now - last_time
-        last_time = now
 
         with pwm_lock:
             signL = sL
@@ -585,17 +587,20 @@ def measure_velocities():
             R = right_count
             tL = last_tick_time_L
             tR = last_tick_time_R
+            dtL = last_tick_dt_L
+            dtR = last_tick_dt_R
 
         dL = L - last_L
         dR = R - last_R
         last_L = L
         last_R = R
 
-        if dL < 0 or dR < 0:
-            continue
+        omegaL = omegaR = None
 
-        omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt if dL > 0 else None
-        omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt if dR > 0 else None
+        if dL > 0 and dtL > 0:
+            omegaL = signL * 2 * math.pi / (ticks_per_rev * dtL)
+        if dR > 0 and dtR > 0:
+            omegaR = signR * 2 * math.pi / (ticks_per_rev * dtR)
 
         time_since_L = now - tL
         time_since_R = now - tR
@@ -623,7 +628,7 @@ def measure_velocities():
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
 
-        time.sleep(0.01)
+        time.sleep(0.005)
 
 
 def main():
