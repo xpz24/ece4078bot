@@ -45,7 +45,7 @@ last_tick_dt_R = time.monotonic()
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
-RAMP_RATE_DEC = 180
+RAMP_RATE_DEC = 200
 RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
@@ -577,13 +577,15 @@ def measure_velocities():
     last_L, last_R = 0, 0
     omegaL = omegaR = 0
     omegaL_f, omegaR_f = 0.0, 0.0
-    time2stop = 0.2
     last_time = time.monotonic()
 
     while running:
         now = time.monotonic()
         dt = now - last_time
         last_time = now
+
+        with movement_lock:
+            cm = current_movement
 
         with pwm_lock:
             signL = sL
@@ -592,8 +594,6 @@ def measure_velocities():
         with encoder_lock:
             L = left_count
             R = right_count
-            tL = last_tick_time_L
-            tR = last_tick_time_R
             dtL = last_tick_dt_L
             dtR = last_tick_dt_R
 
@@ -602,25 +602,18 @@ def measure_velocities():
         last_L = L
         last_R = R
 
-        time_since_L = now - tL
-        time_since_R = now - tR
-
         if dL == 1 and dtL > 0:
             omegaL = signL * 2 * math.pi / (ticks_per_rev * dtL)
         elif dL > 1:
             omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
-        elif time_since_L < time2stop:
-            omegaL = omegaL
-        else:
+        elif cm == "stop":
             omegaL = 0
 
         if dR == 1 and dtR > 0:
             omegaR = signR * 2 * math.pi / (ticks_per_rev * dtR)
         elif dR > 1:
             omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
-        elif time_since_R < time2stop:
-            omegaR = omegaR
-        else:
+        elif cm == "stop":
             omegaR = 0
 
         omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
@@ -633,7 +626,7 @@ def measure_velocities():
             V = (vL_f + vR_f) / 2
             W = (vR_f - vL_f) / baseline
 
-        time.sleep(0.005)
+        time.sleep(0.02)
 
 
 def main():
