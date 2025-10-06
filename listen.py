@@ -50,6 +50,7 @@ RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
+MIN_TICK_PERIOD = 2 * math.pi / (40 * 60)
 
 # locks
 encoder_lock = threading.Lock()
@@ -168,9 +169,10 @@ def left_encoder_callback(channel):
     # After testing, debouncing not needed
     if prev_left_state is not None and current_state != prev_left_state:
         with encoder_lock:
-            left_count += 1
-            last_tick_dt_L = now - last_tick_time_L
-            last_tick_time_L = now
+            if (now - last_tick_time_L) > MIN_TICK_PERIOD:
+                left_count += 1
+                last_tick_dt_L = now - last_tick_time_L
+                last_tick_time_L = now
         prev_left_state = current_state
 
 
@@ -181,7 +183,8 @@ def right_encoder_callback(channel):
 
     if prev_right_state is not None and current_state != prev_right_state:
         with encoder_lock:
-            right_count += 1
+            if (now - last_tick_time_R) > MIN_TICK_PERIOD:
+                right_count += 1
             last_tick_dt_R = now - last_tick_time_R
             last_tick_time_R = now
         prev_right_state = current_state
@@ -572,11 +575,15 @@ def measure_velocities():
     alpha = 1
     baseline = 0.115
     last_L, last_R = 0, 0
+    omegaL = omegaR = 0
     omegaL_f, omegaR_f = 0.0, 0.0
-    time2stop = 0.5
+    time2stop = 0.2
+    last_time = time.monotonic()
 
     while running:
         now = time.monotonic()
+        dt = now - last_time
+        last_time = now
 
         with pwm_lock:
             signL = sL
@@ -595,38 +602,36 @@ def measure_velocities():
         last_L = L
         last_R = R
 
-        omegaL = omegaR = None
-
-        if dL > 0 and dtL > 0:
-            omegaL = signL * 2 * math.pi / (ticks_per_rev * dtL)
-        if dR > 0 and dtR > 0:
-            omegaR = signR * 2 * math.pi / (ticks_per_rev * dtR)
-
         time_since_L = now - tL
         time_since_R = now - tR
 
-        if omegaL is None and time_since_L < time2stop:
-            omegaL = signL * 2 * math.pi / (ticks_per_rev * time_since_L)
+        if dL == 1 and dtL > 0:
+            omegaL = signL * 2 * math.pi / (ticks_per_rev * dtL)
+        elif dL > 1:
+            omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
+        elif time_since_L < time2stop:
+            omegaL = omegaL
         else:
-            omegaL = omegaL if omegaL is not None else 0.0
+            omegaL = 0
 
-        if omegaR is None and time_since_R < time2stop:
-            omegaR = signR * 2 * math.pi / (ticks_per_rev * time_since_R)
+        if dR == 1 and dtR > 0:
+            omegaR = signR * 2 * math.pi / (ticks_per_rev * dtR)
+        elif dR > 1:
+            omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
+        elif time_since_R < time2stop:
+            omegaR = omegaR
         else:
-            omegaR = omegaR if omegaR is not None else 0.0
-
-        vL = omegaL * r  # ? omegaL or omegaL_f?
-        vR = omegaR * r
+            omegaR = 0
 
         omegaL_f = (1 - alpha) * omegaL_f + alpha * omegaL
         omegaR_f = (1 - alpha) * omegaR_f + alpha * omegaR
 
         with encoder_lock:
             # # Using exponential moving average for smoothing
-            V = (1 - alpha) * V + alpha * ((vL + vR) / 2)
-            W = (1 - alpha) * W + alpha * ((vR - vL) / baseline)
             vL_f = omegaL_f * r
             vR_f = omegaR_f * r
+            V = (vL_f + vR_f) / 2
+            W = (vR_f - vL_f) / baseline
 
         time.sleep(0.005)
 
