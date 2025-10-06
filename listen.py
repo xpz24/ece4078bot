@@ -40,7 +40,7 @@ sR = 0.0
 ds = 0.0
 dth = 0.0
 sign_L, sign_R = 1, 1
-displacement_seq = 0
+# displacement_seq = 0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -482,7 +482,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, displacement_seq
+    global left_pwm, right_pwm, running  # , displacement_seq
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -494,7 +494,7 @@ def wheel_server():
         try:
             client_socket, _ = server_socket.accept()
             print(f"Wheel client connected")
-            last_seq_sent = -1
+            # last_seq_sent = -1
 
             while running:
                 try:
@@ -514,14 +514,15 @@ def wheel_server():
 
                     # Send sL, sR, ds and dth back
                     with encoder_lock:
-                        curr_seq = displacement_seq
-                        if curr_seq != last_seq_sent:
-                            response = struct.pack("!ffff", sL, sR, ds, dth)
-                            last_seq_sent = curr_seq
-                        else:
-                            response = struct.pack("!ffff", 0, 0, 0, 0)
+                        # curr_seq = displacement_seq
+                        # if curr_seq != last_seq_sent:
+                        response = struct.pack("!ffff", sL, sR, ds, dth)
+                        # last_seq_sent = curr_seq
+                        sL = sR = ds = dth = 0.0
+                        # else:
+                        #     response = struct.pack("!ffff", 0, 0, 0, 0)
                     client_socket.sendall(response)
-                    time.sleep(0.001)
+                    # time.sleep(0.001)
 
                 except Exception as e:
                     print(f"Wheel client disconnected")
@@ -537,7 +538,7 @@ def wheel_server():
 
 
 def measure_displacement():
-    global sL, sR, ds, dth, displacement_seq
+    global sL, sR, ds, dth  # , displacement_seq
 
     ticks_per_rev = 40
     r = 0.033
@@ -569,13 +570,13 @@ def measure_displacement():
             last_Lc = 0
             continue
 
-        if dLc != 0 and dRc != 0:
+        if dLc != 0 or dRc != 0:
             with encoder_lock:
-                sL = signL * dLc * mPerTick
-                sR = signR * dRc * mPerTick
+                sL += signL * dLc * mPerTick
+                sR += signR * dRc * mPerTick
                 ds = (sL + sR) / 2
                 dth = (sR - sL) / baseline
-                displacement_seq += 1
+                # displacement_seq += 1
 
         time.sleep(0.01)
 
