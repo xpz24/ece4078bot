@@ -117,6 +117,8 @@ def clamp(x: int | float, minimum: int | float, maximum: int | float):
 
 
 def setup_gpio():
+    global prev_left_state, prev_right_state
+    
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
@@ -144,6 +146,11 @@ def setup_gpio():
     right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 100)
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
+    
+    # Init encoder state
+    prev_left_state = GPIO.input(LEFT_ENCODER)
+    prev_right_state = GPIO.input(RIGHT_ENCODER)
+    
 
 
 def left_encoder_callback(channel):
@@ -157,10 +164,6 @@ def left_encoder_callback(channel):
             left_count += 1
         prev_left_state = current_state
 
-    elif prev_left_state is None:
-        # First reading
-        prev_left_state = current_state
-
 
 def right_encoder_callback(channel):
     global right_count, prev_right_state
@@ -169,9 +172,6 @@ def right_encoder_callback(channel):
     if prev_right_state is not None and current_state != prev_right_state:
         with encoder_lock:
             right_count += 1
-        prev_right_state = current_state
-
-    elif prev_right_state is None:
         prev_right_state = current_state
 
 
@@ -632,7 +632,7 @@ def measure_displacement():
             sL = signL * dLc * mPerTick
             sR = signR * dRc * mPerTick
             ds = (sL + sR) / 2
-            dth = (1 - 0.2) * dth + 0.2((sR - sL) / baseline)
+            dth = (sR - sL) / baseline
 
         time.sleep(0.1)
 
