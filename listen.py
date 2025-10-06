@@ -37,6 +37,7 @@ left_pwm, right_pwm = 0, 0
 left_count, right_count = 0, 0
 vL_f, vR_f = 0.0, 0.0
 W, V = 0.0, 0.0
+sL, sR = 1, 1
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
@@ -262,7 +263,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 
 def pid_control():
-    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement
+    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, sL, sR
 
     integral = 0.0
     last_error = 0.0
@@ -270,7 +271,6 @@ def pid_control():
     switch_mode = [False, False]
     ramp_left_pwm = 0
     ramp_right_pwm = 0
-    sL, sR = 1, 1
 
     while running:
         with encoder_lock:
@@ -280,8 +280,9 @@ def pid_control():
             l_pwm = left_pwm
             r_pwm = right_pwm
 
-        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else sL
-        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else sR
+        with pwm_lock:
+            sL = ramp_left_pwm / abs(ramp_left_pwm) if ramp_left_pwm != 0 else sL
+            sR = ramp_right_pwm / abs(ramp_right_pwm) if ramp_right_pwm != 0 else sR
 
         current_time = time.monotonic()
         dt = current_time - last_time
@@ -317,7 +318,8 @@ def pid_control():
                 "rotate_right",
             ]:
                 if current_movement in ["forward", "backward"]:
-                    error = (sL * l_count) - (sR * r_count)
+                    with pwm_lock:
+                        error = (sL * l_count) - (sR * r_count)
                     if prev_movement in ["rotate_left", "rotate_right"]:
                         integral = 0.0  # ? Decay instead of reset?
                         last_error = 0.0
@@ -327,7 +329,8 @@ def pid_control():
                     derivative = KD * (error - last_error) / dt if dt > 0 else 0
                     integral += KI * error * dt
                 else:
-                    error = (sL * l_count) + (sR * r_count)
+                    with pwm_lock:
+                        error = (sL * l_count) + (sR * r_count)
                     if prev_movement in ["forward", "backward"]:
                         integral = 0.0
                         last_error = 0.0
@@ -564,10 +567,8 @@ def measure_velocities():
 
     while running:
         with pwm_lock:
-            l_pwm = left_pwm
-            r_pwm = right_pwm
-        sL = l_pwm / abs(l_pwm) if l_pwm != 0 else sL
-        sR = r_pwm / abs(r_pwm) if r_pwm != 0 else sR
+            signL = sL
+            signR = sR
 
         with encoder_lock:
             L = left_count
@@ -581,8 +582,8 @@ def measure_velocities():
         last_L = L
         last_R = R
 
-        omegaL = sL * 2 * math.pi * (dL / ticks_per_rev) / dt
-        omegaR = sR * 2 * math.pi * (dR / ticks_per_rev) / dt
+        omegaL = signL * 2 * math.pi * (dL / ticks_per_rev) / dt
+        omegaR = signR * 2 * math.pi * (dR / ticks_per_rev) / dt
         # This is ok since big jump can only occur for one cycle
         if abs(omegaL) > max_omega:
             omegaL = 0.0
