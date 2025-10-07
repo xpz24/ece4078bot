@@ -55,12 +55,23 @@ M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
 LINEAR_PRIMING = 0.03
 ROTATION_PRIMING = 0.015
 POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
-POWER_BRAKING_TIME = 0.08
+POWER_BRAKING_TIME_ROT = 0.05
+POWER_BRAKING_TIME_LIN = 0.12
 
 # locks
 encoder_lock = threading.Lock()
 pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
+
+
+def right_pwm_compensator(req_pwm):
+    if req_pwm > 0:
+        cmd_pwm = 1.241809 * req_pwm + -3.539788
+    elif req_pwm < 0:
+        cmd_pwm = 1.272179 * req_pwm + 3.640242
+    else:
+        return req_pwm
+    return cmd_pwm
 
 
 def clamp(x: int | float, minimum: int | float, maximum: int | float):
@@ -102,7 +113,6 @@ def setup_gpio():
     right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 60)
     left_motor_pwm.start(0)
     right_motor_pwm.start(0)
-
 
 
 def left_encoder_callback(channel):
@@ -178,8 +188,11 @@ def set_motors(left, right):
         p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
         and c_movement == "stop"
     ):
-        brake_duty = 40  # % reverse torque
-        brake_time = 0.08  # 80 ms
+        brake_duty = POWER_BRAKING_DUTY  # % reverse torque
+        if p_movement in ["rotate_left", "rotate_right"]:
+            brake_time = POWER_BRAKING_TIME_ROT
+        else:
+            brake_time = POWER_BRAKING_TIME_LIN
 
         if p_movement == "forward":
             # reverse direction briefly
