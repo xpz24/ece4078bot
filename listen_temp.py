@@ -59,7 +59,7 @@ movement_lock = threading.Lock()
 
 
 # # ---- config ----
-# C_ROT = round(0.22 * 255)  # "carrier" PWM: just above deadband (raw PWM units)
+# C_ROT = round(0.22 * 100)  # "carrier" PWM: just above deadband (raw PWM units)
 # T_ENV = 0.03  # 0.12–0.22s feels good
 # BYPASS_ABOVE_CARRIER = True  # switch to continuous when > C_ROT
 # BASELINE_RATIO = 0.5

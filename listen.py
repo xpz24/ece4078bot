@@ -48,12 +48,21 @@ RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 30
 current_movement, prev_movement = "stop", "stop"
+TICKS_PER_REV = 40
+RADIUS = 0.033
+BASELINE = 0.115
+M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
 
 # locks
 encoder_lock = threading.Lock()
 pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
+# # ---- config ----
+# C_ROT = round(0.22 * 100)  # "carrier" PWM: just above deadband (raw PWM units)
+# T_ENV = 0.03  # 0.12–0.22s feels good
+# BYPASS_ABOVE_CARRIER = True  # switch to continuous when > C_ROT
+# BASELINE_RATIO = 0.5
 
 # # ---- persistent state (module-scope) ----
 # _env_phase_end = None
@@ -201,6 +210,23 @@ def set_motors(left, right):
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
         time.sleep(0.05)
+
+    if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
+        # brief symmetrical 100% kick to overcome static friction
+        if c_movement == "rotate_left":
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        else:  # rotate_right
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        time.sleep(0.03)  # shorter than linear kick (rotation needs less)
 
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
@@ -533,10 +559,8 @@ def wheel_server():
 def measure_displacement():
     global sL, sR, ds, dth
 
-    ticks_per_rev = 40
-    r = 0.033
-    baseline = 0.115
-    mPerTick = 2 * math.pi * r / ticks_per_rev
+    baseline = BASELINE
+    mPerTick = M_PER_TICK
     signL, signR = 1, 1
     with encoder_lock:
         last_Lc = left_count
@@ -569,7 +593,7 @@ def measure_displacement():
                 ds = (sL + sR) / 2
                 dth = (sR - sL) / baseline
 
-        time.sleep(0.01)
+        time.sleep(0.005)
 
 
 def main():
