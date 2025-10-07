@@ -42,82 +42,25 @@ dth = 0.0
 sign_L, sign_R = 1, 1
 prev_left_state, prev_right_state = None, None
 use_ramping = True
-RAMP_RATE_ACC = 180  # PWM units per second (adjust this value to tune ramp speed)
-RAMP_RATE_DEC = 200
+RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
+RAMP_RATE_DEC = 100
 RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
-MIN_PWM_THRESHOLD = 30
+MIN_PWM_THRESHOLD = 5
 current_movement, prev_movement = "stop", "stop"
 TICKS_PER_REV = 40
 RADIUS = 0.033
 BASELINE = 0.115
 M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
+LINEAR_PRIMING = 0.03
+ROTATION_PRIMING = 0.015
+POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
+POWER_BRAKING_TIME = 0.08
 
 # locks
 encoder_lock = threading.Lock()
 pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
-
-# # ---- config ----
-# C_ROT = round(0.22 * 100)  # "carrier" PWM: just above deadband (raw PWM units)
-# T_ENV = 0.03  # 0.12–0.22s feels good
-# BYPASS_ABOVE_CARRIER = True  # switch to continuous when > C_ROT
-# BASELINE_RATIO = 0.5
-
-# # ---- persistent state (module-scope) ----
-# _env_phase_end = None
-# _env_on = False
-# _duty = 0.0
-
-
-# def rotate_envelope(L_req, R_req, is_rotation, now):
-#     """
-#     Always envelope in rotation:
-#       - if |req| <= C_ROT: duty = |req|/C_ROT, pulse ±C_ROT then 0/brake.
-#       - if |req| >  C_ROT: either bypass or output continuous (duty=1).
-#     Returns (L_out, R_out, used_env)
-#     """
-#     global _env_on, _env_phase_end, _duty
-#     if not is_rotation:
-#         return L_req, R_req, False
-
-#     # Requested magnitude from ramped outputs
-#     P_req = max(abs(L_req), abs(R_req))
-
-#     # Region B: above carrier
-#     if P_req > C_ROT:
-#         if BYPASS_ABOVE_CARRIER:
-#             # continuous (no envelope)
-#             return L_req, R_req, False
-
-#     # Region A: micro-turns — envelope with duty < 1
-#     if C_ROT <= 1e-1:
-#         return 0.0, 0.0, True  # safety
-
-#     duty = clamp(P_req / float(C_ROT), 0.0, 1.0)
-#     _duty = duty
-#     on_time = duty * T_ENV
-#     off_time = max(1e-3, T_ENV - on_time)
-
-#     # Init phase timer
-#     if _env_phase_end is None:
-#         _env_on = duty > 0
-#         _env_phase_end = now + (on_time if _env_on else off_time)
-
-#     # Phase switch
-#     if now >= _env_phase_end:
-#         _env_on = not _env_on
-#         _env_phase_end = now + (on_time if _env_on else off_time)
-
-#     sL = 1 if L_req >= 0 else -1
-#     sR = 1 if R_req >= 0 else -1
-
-#     if _env_on and duty > 0.0:
-#         return sL * C_ROT, sR * C_ROT, True
-#     else:
-#         # return 0.0, 0.0, True
-#         base_pwm = BASELINE_RATIO * C_ROT
-#         return sL * base_pwm, sR * base_pwm, True
 
 
 def clamp(x: int | float, minimum: int | float, maximum: int | float):
@@ -149,16 +92,17 @@ def setup_gpio():
     GPIO.add_event_detect(LEFT_ENCODER, GPIO.BOTH, callback=left_encoder_callback)
     GPIO.add_event_detect(RIGHT_ENCODER, GPIO.BOTH, callback=right_encoder_callback)
 
-    # Initialize PWM (frequency: 100Hz)
-    global left_motor_pwm, right_motor_pwm
-    left_motor_pwm = GPIO.PWM(LEFT_MOTOR_ENB, 100)
-    right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 100)
-    left_motor_pwm.start(0)
-    right_motor_pwm.start(0)
-
     # Init encoder state
     prev_left_state = GPIO.input(LEFT_ENCODER)
     prev_right_state = GPIO.input(RIGHT_ENCODER)
+
+    # Initialize PWM (frequency: 60Hz)
+    global left_motor_pwm, right_motor_pwm
+    left_motor_pwm = GPIO.PWM(LEFT_MOTOR_ENB, 60)
+    right_motor_pwm = GPIO.PWM(RIGHT_MOTOR_ENA, 60)
+    left_motor_pwm.start(0)
+    right_motor_pwm.start(0)
+
 
 
 def left_encoder_callback(channel):
@@ -195,7 +139,7 @@ def set_motors(left, right):
         p_movement = prev_movement
         c_movement = current_movement
 
-    # Pre-Start Kick (Motor Priming), to reduce initial jerk and slight orientation change
+    # # ------------------- MOTOR PRIMING ----------------------
     if p_movement == "stop" and c_movement in ["forward", "backward"]:
         if c_movement == "forward":
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
@@ -209,7 +153,7 @@ def set_motors(left, right):
             GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
-        time.sleep(0.05)
+        time.sleep(LINEAR_PRIMING)
 
     if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
         # brief symmetrical 100% kick to overcome static friction
@@ -226,8 +170,53 @@ def set_motors(left, right):
 
         left_motor_pwm.ChangeDutyCycle(100)
         right_motor_pwm.ChangeDutyCycle(100)
-        time.sleep(0.03)  # shorter than linear kick (rotation needs less)
+        time.sleep(ROTATION_PRIMING)  # shorter than linear kick (rotation needs less)
 
+    # # ------- Transient Power Braking -------
+    # detect transition from movement to stop
+    if (
+        p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
+        and c_movement == "stop"
+    ):
+        brake_duty = 40  # % reverse torque
+        brake_time = 0.08  # 80 ms
+
+        if p_movement == "forward":
+            # reverse direction briefly
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        elif p_movement == "backward":
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        elif p_movement == "rotate_left":
+            # briefly reverse rotation
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+        elif p_movement == "rotate_right":
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+
+        left_motor_pwm.ChangeDutyCycle(brake_duty)
+        right_motor_pwm.ChangeDutyCycle(brake_duty)
+        time.sleep(brake_time)  # brief pulse
+
+        # then fall into steady-state active brake
+        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+        GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+        left_motor_pwm.ChangeDutyCycle(100)
+        right_motor_pwm.ChangeDutyCycle(100)
+        return  # early exit to avoid reapplying below
+    # # ---- Normal Drive + Steady State Active Braking ----
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
