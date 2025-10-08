@@ -40,7 +40,10 @@ sR = 0.0
 ds = 0.0
 dth = 0.0
 sign_L, sign_R = 1, 1
-sent = False
+packet_id = 0
+packet_ready = False
+last_sent_id = 0
+last_cleared_id = 0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
@@ -509,7 +512,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, sL, sR, dth, ds, sent
+    global left_pwm, right_pwm, running, sL, sR, dth, ds, packet_id, packet_ready, last_sent_id
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -537,8 +540,12 @@ def wheel_server():
 
                     # Send sL, sR, ds and dth back
                     with encoder_lock:
-                        response = struct.pack("!ffff", sL, sR, ds, dth)
-                        sent = True
+                        if packet_ready and packet_id != last_sent_id:
+                            response = struct.pack("!ffff", sL, sR, ds, dth)
+                            last_sent_id = packet_id
+                            packet_ready = False
+                        else:
+                            response = struct.pack("!ffff", 0, 0, 0, 0)
                     client_socket.sendall(response)
 
                 except Exception as e:
@@ -555,7 +562,7 @@ def wheel_server():
 
 
 def measure_displacement():
-    global sL, sR, ds, dth, sent
+    global sL, sR, ds, dth, last_cleared_id, packet_ready, packet_id
 
     baseline = BASELINE
     mPerTick = M_PER_TICK
@@ -586,13 +593,16 @@ def measure_displacement():
 
         if dLc != 0 or dRc != 0:
             with encoder_lock:
-                if sent:
-                    sL, sR, ds, dth = 0
-                    sent = False
                 sL += signL * dLc * mPerTick
                 sR += signR * dRc * mPerTick
                 ds = (sL + sR) / 2
                 dth = (sR - sL) / baseline
+                packet_id += 1
+                packet_ready = True
+                
+                if last_cleared_id < last_sent_id:
+                    sL = sR = ds = dth = 0
+                    last_cleared_id = last_sent_id
 
         time.sleep(0.005)
 
