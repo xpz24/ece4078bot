@@ -46,20 +46,20 @@ prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
 RAMP_RATE_DEC = 100
-MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
+MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 5
 current_movement, prev_movement = "stop", "stop"
 TICKS_PER_REV = 40
 RADIUS = 0.033
 BASELINE = 0.115
 M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
-LINEAR_PRIMING = 0.03
-ROTATION_PRIMING = 0.015
+LINEAR_PRIMING = 0.05
+ROTATION_PRIMING = 0.03
 POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
-POWER_BRAKING_TIME_ROT = 0.05
-POWER_BRAKING_TIME_LIN = 0.12
+POWER_BRAKING_TIME_ROT = 0.04
+POWER_BRAKING_TIME_LIN = 0.08
 DISABLE_ODM_PB = True
-pb_mode = Falseencoder_lock = threading.Lock()
+pb_mode = False
 
 # locks
 encoder_lock = threading.Lock()
