@@ -42,8 +42,6 @@ dth = 0.0
 sign_L, sign_R = 1, 1
 packet_id = 0
 packet_ready = False
-last_sent_id = 0
-last_cleared_id = 0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
@@ -511,8 +509,17 @@ def pid_config_server():
     server_socket.close()
 
 
+def recv_exact(sock, n):
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("socket closed")
+        buf.extend(chunk)
+    return bytes(buf)
+
 def wheel_server():
-    global left_pwm, right_pwm, running, sL, sR, dth, ds, packet_id, packet_ready, last_sent_id
+    global left_pwm, right_pwm, running, sL, sR, dth, ds, packet_id, packet_ready
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -523,15 +530,17 @@ def wheel_server():
     while running:
         try:
             client_socket, _ = server_socket.accept()
+            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             print(f"Wheel client connected")
 
             while running:
                 try:
                     # Receive speed (4 bytes for each value)
-                    data = client_socket.recv(8)
-                    if not data or len(data) != 8:
-                        print("Wheel client sending speed error")
-                        break
+                    # data = client_socket.recv(8)
+                    # if not data or len(data) != 8:
+                    #     print("Wheel client sending speed error")
+                    #     break
+                    data = recv_exact(client_socket, 8)
 
                     # Unpack speed values and convert to PWM
                     left_speed, right_speed = struct.unpack("!ff", data)
@@ -540,12 +549,13 @@ def wheel_server():
 
                     # Send sL, sR, ds and dth back
                     with encoder_lock:
-                        if packet_ready and packet_id != last_sent_id:
-                            response = struct.pack("!ffff", sL, sR, ds, dth)
-                            last_sent_id = packet_id
+                        if packet_ready:
+                            response = struct.pack("!ffffI", sL, sR, ds, dth, packet_id)
                             packet_ready = False
+                            sL = sR = ds = dth = 0.0
+                            packet_id += 1
                         else:
-                            response = struct.pack("!ffff", 0, 0, 0, 0)
+                            response = struct.pack("!ffffI", 0.0, 0.0, 0.0, 0.0, packet_id)
                     client_socket.sendall(response)
 
                 except Exception as e:
@@ -562,7 +572,7 @@ def wheel_server():
 
 
 def measure_displacement():
-    global sL, sR, ds, dth, last_cleared_id, packet_ready, packet_id
+    global sL, sR, ds, dth, packet_ready
 
     baseline = BASELINE
     mPerTick = M_PER_TICK
@@ -597,12 +607,7 @@ def measure_displacement():
                 sR += signR * dRc * mPerTick
                 ds = (sL + sR) / 2
                 dth = (sR - sL) / baseline
-                packet_id += 1
                 packet_ready = True
-                
-                if last_cleared_id < last_sent_id:
-                    sL = sR = ds = dth = 0
-                    last_cleared_id = last_sent_id
 
         time.sleep(0.005)
 
