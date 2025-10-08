@@ -58,6 +58,8 @@ ROTATION_PRIMING = 0.015
 POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
 POWER_BRAKING_TIME_ROT = 0.05
 POWER_BRAKING_TIME_LIN = 0.12
+DISABLE_ODM_PB = True
+pb_mode = Falseencoder_lock = threading.Lock()
 
 # locks
 encoder_lock = threading.Lock()
@@ -145,13 +147,16 @@ def reset_encoder():
 
 
 def set_motors(left, right):
-    global prev_movement, current_movement
+    global prev_movement, current_movement, sign_L, sign_R, pb_mode
     with movement_lock:
         p_movement = prev_movement
         c_movement = current_movement
 
     # # ------------------- MOTOR PRIMING ----------------------
     if p_movement == "stop" and c_movement in ["forward", "backward"]:
+        if DISABLE_ODM_PB:
+            with encoder_lock:
+                pb_mode = True
         if c_movement == "forward":
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -168,6 +173,9 @@ def set_motors(left, right):
 
     if p_movement == "stop" and c_movement in ["rotate_left", "rotate_right"]:
         # brief symmetrical 100% kick to overcome static friction
+        if DISABLE_ODM_PB:
+            with encoder_lock:
+                pb_mode = True
         if c_movement == "rotate_left":
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -189,6 +197,9 @@ def set_motors(left, right):
         p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
         and c_movement == "stop"
     ):
+        if DISABLE_ODM_PB:
+            with encoder_lock:
+                pb_mode = True
         brake_duty = POWER_BRAKING_DUTY  # % reverse torque
         if p_movement in ["rotate_left", "rotate_right"]:
             brake_time = POWER_BRAKING_TIME_ROT
@@ -201,22 +212,30 @@ def set_motors(left, right):
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
             GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
             GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+            with pwm_lock:
+                sign_R, sign_L = -1, -1
         elif p_movement == "backward":
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
             GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
             GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+            with pwm_lock:
+                sign_R, sign_L = 1, 1
         elif p_movement == "rotate_left":
             # briefly reverse rotation
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
             GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
             GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+            with pwm_lock:
+                sign_R, sign_L = -1, 1
         elif p_movement == "rotate_right":
             GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
             GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
             GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
             GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+            with pwm_lock:
+                sign_R, sign_L = 1, -1
 
         left_motor_pwm.ChangeDutyCycle(brake_duty)
         right_motor_pwm.ChangeDutyCycle(brake_duty)
@@ -231,6 +250,8 @@ def set_motors(left, right):
         right_motor_pwm.ChangeDutyCycle(100)
         return  # early exit to avoid reapplying below
     # # ---- Normal Drive + Steady State Active Braking ----
+    with encoder_lock:
+        pb_mode = False
     if right > 0:
         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
@@ -364,8 +385,8 @@ def pid_control():
                     target_right_pwm = r_pwm - correction
             else:
                 reset_encoder()
-                integral = 0
-                last_error = 0
+                integral = 0.0
+                last_error = 0.0
                 target_left_pwm = l_pwm
                 target_right_pwm = r_pwm
 
@@ -408,7 +429,7 @@ def pid_control():
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
-        time.sleep(0.01)
+        time.sleep(0.005)
 
 
 def camera_stream_server():
@@ -518,6 +539,7 @@ def recv_exact(sock, n):
         buf.extend(chunk)
     return bytes(buf)
 
+
 def wheel_server():
     global left_pwm, right_pwm, running, sL, sR, dth, ds, packet_id, packet_ready
 
@@ -535,11 +557,6 @@ def wheel_server():
 
             while running:
                 try:
-                    # Receive speed (4 bytes for each value)
-                    # data = client_socket.recv(8)
-                    # if not data or len(data) != 8:
-                    #     print("Wheel client sending speed error")
-                    #     break
                     data = recv_exact(client_socket, 8)
 
                     # Unpack speed values and convert to PWM
@@ -555,7 +572,9 @@ def wheel_server():
                             sL = sR = ds = dth = 0.0
                             packet_id += 1
                         else:
-                            response = struct.pack("!ffffI", 0.0, 0.0, 0.0, 0.0, packet_id)
+                            response = struct.pack(
+                                "!ffffI", 0.0, 0.0, 0.0, 0.0, packet_id
+                            )
                     client_socket.sendall(response)
 
                 except Exception as e:
@@ -595,19 +614,14 @@ def measure_displacement():
         last_Lc = Lc
         last_Rc = Rc
 
-        # Guard against encoder resets
-        if dLc < 0:
-            continue
-        elif dRc < 0:
-            continue
-
-        if dLc != 0 or dRc != 0:
+        if dLc > 0 or dRc > 0:
             with encoder_lock:
-                sL += signL * dLc * mPerTick
-                sR += signR * dRc * mPerTick
-                ds = (sL + sR) / 2
-                dth = (sR - sL) / baseline
-                packet_ready = True
+                if not pb_mode:
+                    sL += signL * dLc * mPerTick
+                    sR += signR * dRc * mPerTick
+                    ds = (sL + sR) / 2
+                    dth = (sR - sL) / baseline
+                    packet_ready = True
 
         time.sleep(0.005)
 

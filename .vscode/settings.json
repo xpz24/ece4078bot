@@ -2,8 +2,11 @@
     "cSpell.words": [
         "calib",
         "deadband",
+        "Falseencoder",
         "Golay",
         "gpio",
+        "IPPROTO",
+        "NODELAY",
         "picam",
         "picamera",
         "Picamera",
