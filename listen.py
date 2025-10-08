@@ -44,7 +44,6 @@ prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
 RAMP_RATE_DEC = 100
-RIGHT_WHEEL_OFFSET = 1  # 5% boost for weaker wheel
 MIN_RAMP_THRESHOLD = 30  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 5
 current_movement, prev_movement = "stop", "stop"
@@ -521,7 +520,6 @@ def wheel_server():
         try:
             client_socket, _ = server_socket.accept()
             print(f"Wheel client connected")
-            # last_seq_sent = -1
 
             while running:
                 try:
@@ -536,7 +534,7 @@ def wheel_server():
                     with pwm_lock:
                         left_pwm, right_pwm = (
                             left_speed * 100,
-                            right_speed * 100 * RIGHT_WHEEL_OFFSET,
+                            right_speed * 100
                         )
 
                     # Send sL, sR, ds and dth back
