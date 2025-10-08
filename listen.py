@@ -40,6 +40,7 @@ sR = 0.0
 ds = 0.0
 dth = 0.0
 sign_L, sign_R = 1, 1
+sent = False
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
@@ -508,7 +509,7 @@ def pid_config_server():
 
 
 def wheel_server():
-    global left_pwm, right_pwm, running, sL, sR, dth, ds
+    global left_pwm, right_pwm, running, sL, sR, dth, ds, sent
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -532,15 +533,12 @@ def wheel_server():
                     # Unpack speed values and convert to PWM
                     left_speed, right_speed = struct.unpack("!ff", data)
                     with pwm_lock:
-                        left_pwm, right_pwm = (
-                            left_speed * 100,
-                            right_speed * 100
-                        )
+                        left_pwm, right_pwm = (left_speed * 100, right_speed * 100)
 
                     # Send sL, sR, ds and dth back
                     with encoder_lock:
                         response = struct.pack("!ffff", sL, sR, ds, dth)
-                        sL = sR = ds = dth = 0.0
+                        sent = True
                     client_socket.sendall(response)
 
                 except Exception as e:
@@ -557,7 +555,7 @@ def wheel_server():
 
 
 def measure_displacement():
-    global sL, sR, ds, dth
+    global sL, sR, ds, dth, sent
 
     baseline = BASELINE
     mPerTick = M_PER_TICK
@@ -588,6 +586,9 @@ def measure_displacement():
 
         if dLc != 0 or dRc != 0:
             with encoder_lock:
+                if sent:
+                    sL, sR, ds, dth = 0
+                    sent = False
                 sL += signL * dLc * mPerTick
                 sR += signR * dRc * mPerTick
                 ds = (sL + sR) / 2
