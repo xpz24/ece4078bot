@@ -4,6 +4,7 @@ import io
 import threading
 import time
 import math
+import pigpio
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
 
@@ -16,7 +17,7 @@ CAMERA_PORT = 8001
 PID_CONFIG_PORT = 8002
 
 # Pins
-RIGHT_MOTOR_ENA = 18
+RIGHT_MOTOR_ENA = 22
 RIGHT_MOTOR_IN1 = 17
 RIGHT_MOTOR_IN2 = 27
 LEFT_MOTOR_ENB = 25
@@ -24,6 +25,7 @@ LEFT_MOTOR_IN3 = 23
 LEFT_MOTOR_IN4 = 24
 LEFT_ENCODER = 26
 RIGHT_ENCODER = 16
+COUNTER_PIN = 18
 
 # PID Constants (default values, will be overridden by client)
 use_PID = 0
@@ -42,6 +44,7 @@ dth = 0.0
 sign_L, sign_R = 1, 1
 packet_id = 0
 packet_ready = False
+counter = 0
 prev_left_state, prev_right_state = None, None
 use_ramping = True
 RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
@@ -52,7 +55,10 @@ current_movement, prev_movement = "stop", "stop"
 TICKS_PER_REV = 40
 RADIUS = 0.033
 BASELINE = 0.115
-M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
+RAD_PER_TICK = 2 * math.pi / TICKS_PER_REV
+M_PER_TICK = RAD_PER_TICK * RADIUS
+TARGET_REV_PER_SEC = 1
+INTERVAL = 1 / (TARGET_REV_PER_SEC * TICKS_PER_REV)
 LINEAR_PRIMING = 0.05
 ROTATION_PRIMING = 0.03
 POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
@@ -68,6 +74,16 @@ encoder_lock = threading.Lock()
 pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
+
+def reference_counter():
+    global counter
+    next_tick = time.perf_counter()
+    while running:
+        now = time.perf_counter()
+        if now >= next_tick:
+            counter += 1
+            next_tick += INTERVAL
+        time.sleep(max(0, next_tick - time.perf_counter()))
 
 def right_pwm_compensator(req_pwm):
     if req_pwm > 0:
