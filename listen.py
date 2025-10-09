@@ -60,6 +60,8 @@ POWER_BRAKING_TIME_ROT = 0.04
 POWER_BRAKING_TIME_LIN = 0.08
 DISABLE_ODM_PB = True
 pb_mode = False
+disable_brake = False
+BRAKE_DISABLE_THRESHOLD = 0.2
 
 # locks
 encoder_lock = threading.Lock()
@@ -196,6 +198,7 @@ def set_motors(left, right):
     if (
         p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
         and c_movement == "stop"
+        and not disable_brake
     ):
         if DISABLE_ODM_PB:
             with encoder_lock:
@@ -262,9 +265,14 @@ def set_motors(left, right):
         right_motor_pwm.ChangeDutyCycle(min(abs(right), 100))
     else:
         # when pwm = 0, implement Active Braking mode, better than putting duty cycle to 0 which may cause uneven stopping
-        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-        GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-        right_motor_pwm.ChangeDutyCycle(100)
+        if not disable_brake:
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+            right_motor_pwm.ChangeDutyCycle(100)
+        else:
+            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+            right_motor_pwm.ChangeDutyCycle(0)
 
     if left > 0:
         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
@@ -275,9 +283,14 @@ def set_motors(left, right):
         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
         left_motor_pwm.ChangeDutyCycle(min(abs(left), 100))
     else:
-        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        left_motor_pwm.ChangeDutyCycle(100)
+        if not disable_brake:
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+            left_motor_pwm.ChangeDutyCycle(100)
+        else:
+            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+            left_motor_pwm.ChangeDutyCycle(0)
 
 
 def apply_min_threshold(pwm_value, min_threshold):
@@ -291,7 +304,7 @@ def apply_min_threshold(pwm_value, min_threshold):
 
 
 def pid_control():
-    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, sign_L, sign_R
+    global left_pwm, right_pwm, use_PID, KP, KI, KD, rKP, rKI, rKD, prev_movement, current_movement, sign_L, sign_R, disable_brake
 
     integral = 0.0
     last_error = 0.0
@@ -300,6 +313,7 @@ def pid_control():
     ramp_left_pwm = 0
     ramp_right_pwm = 0
     signL, signR = 1, 1
+    move_start_time = None
 
     while running:
         with encoder_lock:
@@ -330,6 +344,24 @@ def pid_control():
         else:
             requested_movement = "rotate_right"
             signL, signR = 1, -1
+
+        # --- Measure move duration for brake decision ---
+        if requested_movement in ("rotate_left", "rotate_right", "forward", "backward"):
+            # Start timer if entering move
+            if move_start_time is None:
+                move_start_time = time.monotonic()
+        elif requested_movement == "stop":
+            # move just ended
+            if move_start_time is not None:
+                move_duration = time.monotonic() - move_start_time
+                # Decide if braking should be disabled
+                disable_brake = (
+                    move_duration < BRAKE_DISABLE_THRESHOLD
+                )  # e.g. 0.25s threshold
+                if not disable_brake:
+                    move_start_time = None
+            else:
+                disable_brake = False
 
         # Only switch once both ramps have finished braking/accelerating
         if not any(switch_mode):  # means [False, False]
