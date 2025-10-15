@@ -211,63 +211,63 @@ def set_motors(left, right):
 
     # # ------- Transient Power Braking -------
     # detect transition from movement to stop
-    if (
-        p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
-        and c_movement == "stop"
-        and not disable_brake
-    ):
-        if DISABLE_ODM_PB:
-            with encoder_lock:
-                pb_mode = True
-        brake_duty = POWER_BRAKING_DUTY  # % reverse torque
-        if p_movement in ["rotate_left", "rotate_right"]:
-            brake_time = POWER_BRAKING_TIME_ROT
-        else:
-            brake_time = POWER_BRAKING_TIME_LIN
+    # if (
+    #     p_movement in ["forward", "backward", "rotate_left", "rotate_right"]
+    #     and c_movement == "stop"
+    #     and not disable_brake
+    # ):
+    #     if DISABLE_ODM_PB:
+    #         with encoder_lock:
+    #             pb_mode = True
+    #     brake_duty = POWER_BRAKING_DUTY  # % reverse torque
+    #     if p_movement in ["rotate_left", "rotate_right"]:
+    #         brake_time = POWER_BRAKING_TIME_ROT
+    #     else:
+    #         brake_time = POWER_BRAKING_TIME_LIN
 
-        if p_movement == "forward":
-            # reverse direction briefly
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-            with pwm_lock:
-                sign_R, sign_L = -1, -1
-        elif p_movement == "backward":
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-            with pwm_lock:
-                sign_R, sign_L = 1, 1
-        elif p_movement == "rotate_left":
-            # briefly reverse rotation
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
-            with pwm_lock:
-                sign_R, sign_L = -1, 1
-        elif p_movement == "rotate_right":
-            GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-            GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
-            GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
-            GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-            with pwm_lock:
-                sign_R, sign_L = 1, -1
+    #     if p_movement == "forward":
+    #         # reverse direction briefly
+    #         GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+    #         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+    #         GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+    #         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+    #         with pwm_lock:
+    #             sign_R, sign_L = -1, -1
+    #     elif p_movement == "backward":
+    #         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+    #         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+    #         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+    #         GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+    #         with pwm_lock:
+    #             sign_R, sign_L = 1, 1
+    #     elif p_movement == "rotate_left":
+    #         # briefly reverse rotation
+    #         GPIO.output(RIGHT_MOTOR_IN1, GPIO.LOW)
+    #         GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+    #         GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+    #         GPIO.output(LEFT_MOTOR_IN4, GPIO.LOW)
+    #         with pwm_lock:
+    #             sign_R, sign_L = -1, 1
+    #     elif p_movement == "rotate_right":
+    #         GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+    #         GPIO.output(RIGHT_MOTOR_IN2, GPIO.LOW)
+    #         GPIO.output(LEFT_MOTOR_IN3, GPIO.LOW)
+    #         GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+    #         with pwm_lock:
+    #             sign_R, sign_L = 1, -1
 
-        left_motor_pwm.ChangeDutyCycle(brake_duty)
-        right_motor_pwm.ChangeDutyCycle(brake_duty)
-        time.sleep(brake_time)  # brief pulse
+    #     left_motor_pwm.ChangeDutyCycle(brake_duty)
+    #     right_motor_pwm.ChangeDutyCycle(brake_duty)
+    #     time.sleep(brake_time)  # brief pulse
 
-        # then fall into steady-state active brake
-        GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
-        GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
-        GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
-        GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
-        left_motor_pwm.ChangeDutyCycle(100)
-        right_motor_pwm.ChangeDutyCycle(100)
-        return  # early exit to avoid reapplying below
+    #     # then fall into steady-state active brake
+    #     GPIO.output(RIGHT_MOTOR_IN1, GPIO.HIGH)
+    #     GPIO.output(RIGHT_MOTOR_IN2, GPIO.HIGH)
+    #     GPIO.output(LEFT_MOTOR_IN3, GPIO.HIGH)
+    #     GPIO.output(LEFT_MOTOR_IN4, GPIO.HIGH)
+    #     left_motor_pwm.ChangeDutyCycle(100)
+    #     right_motor_pwm.ChangeDutyCycle(100)
+    #     return  # early exit to avoid reapplying below
     # # ---- Normal Drive + Steady State Active Braking ----
     with encoder_lock:
         pb_mode = False
