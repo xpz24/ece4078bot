@@ -4,7 +4,7 @@ import io
 import threading
 import time
 import math
-import pigpio
+# import pigpio
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
 
@@ -73,15 +73,15 @@ pwm_lock = threading.Lock()
 movement_lock = threading.Lock()
 
 
-def reference_counter():
-    global counter
-    next_tick = time.perf_counter()
-    while running:
-        now = time.perf_counter()
-        if now >= next_tick:
-            counter += 1
-            next_tick += INTERVAL
-        time.sleep(max(0, next_tick - time.perf_counter()))
+# def reference_counter():
+#     global counter
+#     next_tick = time.perf_counter()
+#     while running:
+#         now = time.perf_counter()
+#         if now >= next_tick:
+#             counter += 1
+#             next_tick += INTERVAL
+#         time.sleep(max(0, next_tick - time.perf_counter()))
 
 def right_pwm_compensator(req_pwm):
     if req_pwm > 0:
