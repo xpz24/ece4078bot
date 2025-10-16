@@ -4,6 +4,7 @@ import io
 import threading
 import time
 import math
+
 # import pigpio
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
@@ -44,7 +45,7 @@ packet_id = 0
 packet_ready = False
 counter = 0
 prev_left_state, prev_right_state = None, None
-use_ramping = True
+use_ramping = False
 RAMP_RATE_ACC = 120  # PWM units per second (adjust this value to tune ramp speed)
 RAMP_RATE_DEC = 120
 MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
@@ -63,6 +64,7 @@ POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 10
 POWER_BRAKING_TIME_ROT = 0.0
 POWER_BRAKING_TIME_LIN = 0.0
 DISABLE_ODM_PB = True
+PB_DURATION = 0.1  # How many seconds of transients to ignore
 pb_mode = False
 disable_brake = False
 BRAKE_DISABLE_THRESHOLD = 0.0
@@ -82,6 +84,7 @@ movement_lock = threading.Lock()
 #             counter += 1
 #             next_tick += INTERVAL
 #         time.sleep(max(0, next_tick - time.perf_counter()))
+
 
 def right_pwm_compensator(req_pwm):
     if req_pwm > 0:
@@ -475,7 +478,7 @@ def pid_control():
         # if ramp_left_pwm != 0: # print for debugging purpose
         #     print(f"(Left PWM, Right PWM)=({ramp_left_pwm:.2f},{ramp_right_pwm:.2f}), (Left Enc, Right Enc)=({left_count}, {right_count})")
 
-        time.sleep(0.005)
+        time.sleep(0.01)
 
 
 def camera_stream_server():
@@ -646,6 +649,8 @@ def measure_displacement():
         last_Lc = left_count
         last_Rc = right_count
 
+    time_since_pb = time.monotonic()
+
     while running:
         with pwm_lock:
             signL = sign_L
@@ -662,7 +667,9 @@ def measure_displacement():
 
         if dLc > 0 or dRc > 0:
             with encoder_lock:
-                if not pb_mode:
+                if pb_mode:
+                    time_since_pb = time.monotonic()
+                elif not pb_mode and (time.monotonic() - time_since_pb) > PB_DURATION:
                     sL += signL * dLc * mPerTick
                     sR += signR * dRc * mPerTick
                     ds = (sL + sR) / 2
