@@ -7,8 +7,6 @@ import math
 import RPi.GPIO as GPIO  # type: ignore
 from picamera2 import Picamera2  # type: ignore
 
-# from scipy.signal import savgol_filter
-
 # Network Configuration
 HOST = "0.0.0.0"
 WHEEL_PORT = 8000
@@ -44,24 +42,24 @@ packet_id = 0
 packet_ready = False
 prev_left_state, prev_right_state = None, None
 use_ramping = True
-RAMP_RATE_ACC = 100  # PWM units per second (adjust this value to tune ramp speed)
-RAMP_RATE_DEC = 100
+RAMP_RATE_ACC = 120  # PWM units per second (adjust this value to tune ramp speed)
+RAMP_RATE_DEC = 120
 MIN_RAMP_THRESHOLD = 5  # Only ramp if change is greater than this
 MIN_PWM_THRESHOLD = 5
 current_movement, prev_movement = "stop", "stop"
 TICKS_PER_REV = 40
 RADIUS = 0.033
-BASELINE = 0.115
+BASELINE = 0.125
 M_PER_TICK = 2 * math.pi * RADIUS / TICKS_PER_REV
 LINEAR_PRIMING = 0.05
-ROTATION_PRIMING = 0.03
+ROTATION_PRIMING = 0.0
 POWER_BRAKING_DUTY = 40  # ! Be careful not to burn the motors, do not set to 100
-POWER_BRAKING_TIME_ROT = 0.04
-POWER_BRAKING_TIME_LIN = 0.08
+POWER_BRAKING_TIME_ROT = 0.0
+POWER_BRAKING_TIME_LIN = 0.0
 DISABLE_ODM_PB = True
 pb_mode = False
 disable_brake = False
-BRAKE_DISABLE_THRESHOLD = 0.2
+BRAKE_DISABLE_THRESHOLD = 0.0
 
 # locks
 encoder_lock = threading.Lock()
